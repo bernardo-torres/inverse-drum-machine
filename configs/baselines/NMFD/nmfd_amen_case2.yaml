@@ -1,0 +1,50 @@
+# @package _global_
+# Setup corresponding to the Case 2 from the paper
+
+sampling_rate: 44100
+
+model:
+  skip_test: true
+  _target_: idm.baselines.nmf.nmfd.NMFDSeparator
+  train_classes:
+    [
+      "CY_CR",
+      "CY_RD",
+      "HH_CHH",
+      "HH_OHH",
+      "KD",
+      "SD",
+      "TT_HFT",
+      "TT_HMT",
+      "TT_LMT",
+    ]
+  version: "full"
+  sampling_rate: ${sampling_rate}
+  # use_gt_transcription: true
+  cascade: false
+  # compression_ratio: ${model.transform.hop_length}
+  # activation_rate: ${eval:'${sampling_rate} / ${model.compression_ratio}'}
+  transform:
+    _target_: idm.feature_extractor.stft.STFT
+    # hop_length: ${get_next_power_of_2_for_duration:${sampling_rate}, 11} # 11ms
+    # n_fft: ${get_next_power_of_2_for_duration:${sampling_rate}, 46} # 46ms
+    hop_length: 512
+    n_fft: 2048
+    magnitude: True
+    pad_left_right: false
+  apply_nema: True
+  lamb: 0.55
+  wiener_filter: false
+  wiener_exponent: 1.0
+  beta: 1
+  tol: 0.0001
+  max_iter: 200
+  verbose: false
+  alpha: 0
+  l1_ratio: 0
+  trainable_W: true
+  trainable_H: true
+  template_length: 15
+  force_crop_template: false
+  constant_H_init: true
+  EPS: 1e-10

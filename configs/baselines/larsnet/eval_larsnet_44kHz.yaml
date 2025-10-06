@@ -1,0 +1,24 @@
+# @package _global_
+model:
+  _target_: idm.baselines.larsnet.larsnet.LarsNet
+  # src/baselines/larsnet/larsnet.py
+  # wiener_filter=wiener_exponent is not None,
+  # wiener_exponent=wiener_exponent,
+  # device=device,
+  # config="config.yaml",
+  wiener_filter: False
+  wiener_exponent: 1
+  device: "cuda"
+  # config: "baselines/larsnet/config.yaml"
+  config: "configs/baselines/larsnet/config.yaml"
+
+  # pre_inference_transform:
+  #   _target_: idm.baselines.larsnet.helpers.MonoToStereo
+
+  # post_inference_transform:
+  #   _target_: idm.baselines.larsnet.helpers.AggregateLarsnetOutputs
+  #   eval_classes: ${model.train}
+
+callbacks:
+  separation_eval:
+    evaluate_transcription: false

@@ -1,0 +1,70 @@
+# I changed the names from kick to KD, snare to SD, etc and also the config paths
+
+global:
+  sr: 44100 # Hz
+  segment: 11.85 # seconds
+  shift: 2 # seconds
+  sample_rate: 44100 # Hz
+  n_workers: 16
+  prefetch_factor: 6
+
+inference_models:
+  KD: "baselines/larsnet/pretrained_larsnet_models/kick/pretrained_kick_unet.pth"
+  SD: "baselines/larsnet/pretrained_larsnet_models/snare/pretrained_snare_unet.pth"
+  TT: "baselines/larsnet/pretrained_larsnet_models/toms/pretrained_toms_unet.pth"
+  HH: "baselines/larsnet/pretrained_larsnet_models/hihat/pretrained_hihat_unet.pth"
+  CY: "baselines/larsnet/pretrained_larsnet_models/cymbals/pretrained_cymbals_unet.pth"
+
+data_augmentation:
+  augmentation_prob: 0.5
+  kit_swap_augment_prob: 0.5
+  doubling_augment_prob: 0.3
+  pitch_shift_augment_prob: 0.3
+  saturation_augment_prob: 0.3
+  channel_swap_augment_prob: 0.5
+  remix_augment_prob: 0.3
+
+KD:
+  F: 2048
+  T: 512
+  batch_size: 24
+  learning_rate: 1e-4
+  epochs: 22
+  training_mode: "stft"
+  model_id: "default_kick_unet"
+
+SD:
+  F: 2048
+  T: 512
+  batch_size: 24
+  learning_rate: 1e-4
+  epochs: 22
+  training_mode: "stft"
+  model_id: "default_snare_unet"
+
+TT:
+  F: 2048
+  T: 512
+  batch_size: 24
+  learning_rate: 1e-4
+  epochs: 22
+  training_mode: "stft"
+  model_id: "default_toms_unet"
+
+HH:
+  F: 2048
+  T: 512
+  batch_size: 24
+  learning_rate: 1e-4
+  epochs: 22
+  training_mode: "stft"
+  model_id: "default_hihat_unet"
+
+CY:
+  F: 2048
+  T: 512
+  batch_size: 24
+  learning_rate: 1e-4
+  epochs: 22
+  training_mode: "stft"
+  model_id: "default_cymbals_unet"

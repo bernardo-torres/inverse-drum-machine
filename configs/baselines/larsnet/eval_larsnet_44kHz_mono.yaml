@@ -1,0 +1,6 @@
+# @package _global_
+defaults:
+  - /baselines/larsnet/eval_larsnet_44kHz
+
+model:
+  mono: true
