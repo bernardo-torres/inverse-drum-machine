@@ -1,8 +1,8 @@
 from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
-import pytorch_lightning as pl
 import torch
+from lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.dataloader import default_collate
 
@@ -13,7 +13,7 @@ from idm.data.dataset import MixOrMultitrackDataset
 ListConfig = list
 
 
-class DataModule(pl.LightningDataModule):
+class DataModule(LightningDataModule):
     """
     LightningDataModule for loading, splitting, and serving drum audio data.
 
@@ -73,6 +73,7 @@ class DataModule(pl.LightningDataModule):
         self.train_dataset: Optional[Dataset] = None
         self.val_dataset: Optional[Dataset] = self.hparams.val_dataset
         self.test_dataset: Optional[Dataset] = self.hparams.test_dataset
+        self.dataloader_kwargs = dataloader_kwargs
 
     def prepare_data(self) -> None:
         pass
@@ -203,7 +204,7 @@ class DataModule(pl.LightningDataModule):
             shuffle=self.hparams.shuffle,
             collate_fn=unified_custom_collate,
             drop_last=True,
-            **self.hparams.dataloader_kwargs,
+            **self.dataloader_kwargs,
         )
 
     def val_dataloader(self) -> Optional[DataLoader]:
@@ -217,7 +218,7 @@ class DataModule(pl.LightningDataModule):
             shuffle=False,
             collate_fn=unified_custom_collate,
             drop_last=False,
-            **self.hparams.dataloader_kwargs,
+            **self.dataloader_kwargs,
         )
 
     def test_dataloader(self) -> Optional[DataLoader]:
@@ -231,7 +232,7 @@ class DataModule(pl.LightningDataModule):
             shuffle=False,
             collate_fn=unified_custom_collate,
             drop_last=False,
-            **self.hparams.dataloader_kwargs,
+            **self.dataloader_kwargs,
         )
 
 

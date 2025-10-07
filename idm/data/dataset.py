@@ -10,6 +10,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import torch
+from omegaconf import DictConfig, ListConfig
 from torch.utils.data import Dataset
 
 # Assumed external dependencies from the original script
@@ -26,10 +27,6 @@ from idm.utils import (
     get_normalizing_function,
     load_audio,
 )
-
-# Placeholder for Hydra/OmegaConf config types
-ListConfig = list
-DictConfig = dict
 
 log = RankedLogger(__name__, rank_zero_only=True)
 

@@ -83,8 +83,7 @@ def task_wrapper(task_func: Callable) -> Callable:
         output_dir = Path(cfg.paths.output_dir)
         try:
             # Execute the decorated task function (e.g., train)
-            metric_dict, object_dict = task_func(cfg=cfg)
-            return metric_dict, object_dict
+            return task_func(cfg=cfg)
 
         except Exception as ex:
             log.error(f"Task execution failed with exception: {ex}")
