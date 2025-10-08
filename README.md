@@ -7,20 +7,32 @@ This repository contains the official implementation of the paper: **"The Invers
 
 IDM does Drum Source Separation (DSS) by using analysis-by-synthesis combined with deep learning. Unlike traditional supervised methods that require isolated stem recordings for training, IDM is trained to reconstruct full mixes using transcription annotations as supervision.
 
-## Key Features
+<!-- ![|IDM Architecture](demo/overview.png)
+ -->
+<!-- lets put the image but small -->
+<table>
+  <tr>
+    <td valign="top">
+      <ul>
+        <li>IDM is trained using only drum mixtures and their corresponding <strong>transcriptions</strong>, eliminating the need for isolated stems.</li>
+        <li>The model jointly trains for Automatic Drum Transcription (ADT) and One-shot drum Sample Synthesis (OSS) in an end-to-end manner.</li>
+        <li>IDM is comparable to state-of-the-art supervised methods while using approximately 100 times fewer parameters.</li>
+        <li>The modular architecture allows for optional external information, such as corrected transcriptions, to be provided at inference time.</li>
+      </ul>
+    </td>
+    <td valign="top" width="250">
+      <img src="demo/overview.png" alt="IDM Architecture" width="250"/>
+    </td>
+  </tr>
+</table>
 
-- IDM is trained using only drum mixtures and their corresponding **transcriptions**, eliminating the need for isolated stems.
-- The model jointly trains for Automatic Drum Transcription (ADT) and One-shot drum Sample Synthesis (OSS) in an end-to-end manner.
-- IDM is comparable to state-of-the-art supervised methods while using approximately 100 times fewer parameters.
-- The modular architecture allows for optional external information, such as corrected transcriptions, to be provided at inference time.
-
-## System Architecture
+### System Architecture
 
 The IDM framework is composed of three main modules:
 
 1.  **Feature Extraction:** A ConvNeXt encoder extracts frame-level features from the input Log-Mel Spectrograms.
-2.  **Synthesis Conditioning:** This module transforms the features into synthesis parameters: transcription onsets, velocities, individual track gains, and a conditioning vector.
-3.  **Decoder:** A one-shot synthesizer and a sequencer work together to reconstruct the individual drum tracks. The one-shot synth is a Temporal Convolutional Network (TCN) conditioned on instrument type and mixture embedding via FiLM. The sequencer is a convolutional operator that uses frequency-domain multiplication.
+2.  **Synthesis Conditioning:** This module transforms the features into synthesis parameters: transcription onsets, velocities, individual track gains, and a conditioning vector for the one-shot synthesizer.
+3.  **Decoder:** A one-shot synthesizer and a sequencer work together to reconstruct the individual drum tracks. The one-shot synth is a Temporal Convolutional Network (TCN) conditioned on instrument type and mixture embedding via FiLM. The sequencer is implemented as frequency-domain multiplication.
 
 ## Installation
 
@@ -79,6 +91,8 @@ year={2025}
 ## TODO
 
 - [ ] Add poetry
+- [ ] Evaluation code
+- [ ] Model weights
 - [ ] Add baseline instructions
 - [ ] Add StemGMD preprocessing instructions
 
