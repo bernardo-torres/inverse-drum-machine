@@ -15,16 +15,21 @@ IDM does Drum Source Separation (DSS) using analysis-by-synthesis combined with 
 
 - The modular architecture allows for optional external information, such as corrected transcriptions, to be provided at inference time.
 
+<!-- add a small note in italic here-->
+
+\*_Pre-trained model weights and evaluation code will be added very soon, for now only the training and inference code is available._
+
 ### System Architecture
+
+IDM is composed of three main modules:
 
 <table border="0" cellspacing="0" cellpadding="10">
 <tr>
 <td valign="top">
-The IDM framework is composed of three main modules:
 <ol>
 <li><strong>Feature Extraction:</strong> A ConvNeXt encoder extracts frame-level features from the input Log-Mel Spectrograms.</li>
 <li><strong>Synthesis Conditioning:</strong> This module transforms the features into synthesis parameters: transcription onsets, velocities, individual track gains, and a conditioning vector for the one-shot synthesizer.</li>
-<li><strong>Decoder:</strong> A one-shot synthesizer and a sequencer work together to reconstruct the individual drum tracks. The one-shot synth is a Temporal Convolutional Network (TCN) conditioned on instrument type and mixture embedding via FiLM. The sequencer is implemented as frequency-domain multiplication.</li>
+<li><strong>Decoder:</strong> A one-shot synthesizer and a sequencer work together to reconstruct the individual drum tracks. The one-shot synth is a Temporal Convolutional Network (TCN) conditioned on instrument type and mixture embedding via FiLM. The sequencer is implemented using FFT multiplication.</li>
 </ol>
 </td>
 <td valign="top" width="250">
