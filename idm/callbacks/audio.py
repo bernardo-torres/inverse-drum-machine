@@ -576,7 +576,7 @@ class LogAudioCallback(BaseCallback):
     ):
         input_mix = batch["mix"][0]
         synthesized_mix = outputs["output"][0]
-        samples = outputs["samples"]
+        # samples = outputs["samples"]
         fn = batch["audio_fn"][0]
 
         is_new_gt = fn not in self.epoch_gt_files

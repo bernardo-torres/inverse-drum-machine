@@ -9,11 +9,11 @@ global:
   prefetch_factor: 6
 
 inference_models:
-  KD: "baselines/larsnet/pretrained_larsnet_models/kick/pretrained_kick_unet.pth"
-  SD: "baselines/larsnet/pretrained_larsnet_models/snare/pretrained_snare_unet.pth"
-  TT: "baselines/larsnet/pretrained_larsnet_models/toms/pretrained_toms_unet.pth"
-  HH: "baselines/larsnet/pretrained_larsnet_models/hihat/pretrained_hihat_unet.pth"
-  CY: "baselines/larsnet/pretrained_larsnet_models/cymbals/pretrained_cymbals_unet.pth"
+  KD: "larsnet/pretrained_models/kick/pretrained_kick_unet.pth"
+  SD: "larsnet/pretrained_models/snare/pretrained_snare_unet.pth"
+  TT: "larsnet/pretrained_models/toms/pretrained_toms_unet.pth"
+  HH: "larsnet/pretrained_models/hihat/pretrained_hihat_unet.pth"
+  CY: "larsnet/pretrained_models/cymbals/pretrained_cymbals_unet.pth"
 
 data_augmentation:
   augmentation_prob: 0.5
