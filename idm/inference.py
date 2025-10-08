@@ -207,3 +207,52 @@ def find_checkpoint(
     raise ValueError(f"Unknown ckpt_type: '{ckpt_type}'. Must be 'last' or 'best_epoch'.")
 
 
+def separate(
+    audio_path: str,
+    model: nn.Module,
+    output_dir: str = "output/separated",
+    masking: str | None = "wiener",
+    alpha: float = 1.0,
+):
+    """Separates a given audio file into its constituent drum stems."""
+    audio, sr = sf.read(audio_path, always_2d=True)
+    audio = torch.from_numpy(audio.T).float()
+
+    model_sr = getattr(model, "sampling_rate", 44100)
+    if sr != model_sr:
+        audio = torchaudio.functional.resample(audio, sr, model_sr)
+
+    device = next(model.parameters()).device
+    audio = audio.to(device)
+    input_mix = audio
+
+    is_mono_model = getattr(model, "mono", False)
+    if is_mono_model and input_mix.shape[0] > 1:
+        input_mix = torch.mean(input_mix, dim=0, keepdim=True)
+    elif not is_mono_model and input_mix.shape[0] == 1 and "LarsNet" in type(model).__name__:
+        input_mix = input_mix.repeat(2, 1)
+
+    with torch.no_grad():
+        if hasattr(model, "encoder"):
+            encoder_outs = model.encoder(input_mix.unsqueeze(0))
+            outputs = model.decoder(**encoder_outs, extra_returns=["stems"])
+            synth_stems = outputs["stems"][..., : audio.shape[-1]]
+            train_classes = model.train_classes
+
+    if masking:
+        transform = STFT(
+            n_fft=1024, hop_length=256, win_length=1024, center=True, magnitude=False
+        ).to(device)
+        mix_tf = transform(audio)
+        synth_tf = transform(synth_stems)
+        masked_stems_tf = estimate_masks(mix_tf, synth_tf, masking_type=masking, alpha=alpha)
+        separated_stems = transform.inverse(masked_stems_tf, length=audio.shape[-1])
+    else:
+        separated_stems = synth_stems
+
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    for i, class_name in enumerate(train_classes):
+        stem_audio = separated_stems[0, i].cpu().numpy()
+        sf.write(output_path / f"{class_name}.wav", stem_audio.T, model_sr)
+
