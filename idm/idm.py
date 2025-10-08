@@ -10,7 +10,7 @@ from sklearn.metrics import accuracy_score
 from idm.decoder.decoder import Decoder
 from idm.feature_extractor.encoder import BaseEncoder
 from idm.run_utils import RankedLogger
-from idm.utils import convert_onset_dict_to_activations, cpu_numpy
+from idm.utils import convert_onset_dict_to_activations
 
 log = RankedLogger(__name__, rank_zero_only=True)
 
@@ -24,8 +24,7 @@ class BaseTrainer(LightningModule):
 
     def __init__(
         self,
-        optimizer: torch.optim.Optimizer,
-        loss: nn.Module = torch.nn.L1Loss(),
+        optimizer: torch.optim.Optimizer = torch.optim.Adam,
         scheduler: Optional[torch.optim.lr_scheduler.LRScheduler] = None,
         monitor: str = "val/loss",
         sampling_rate: int = 44100,
@@ -36,7 +35,6 @@ class BaseTrainer(LightningModule):
 
         Args:
             optimizer: The optimizer class to use for training.
-            loss: The loss function module.
             scheduler: An optional learning rate scheduler.
             monitor: The metric to monitor for the learning rate scheduler.
             sampling_rate: The audio sampling rate.
@@ -45,7 +43,6 @@ class BaseTrainer(LightningModule):
         super().__init__(**kwargs)
         self.optimizer = optimizer
         self.scheduler = scheduler
-        self.loss_fn = loss
         self.monitor = monitor
         self.sampling_rate = sampling_rate
         self.output_dir = output_dir
@@ -99,7 +96,7 @@ class InverseDrumMachine(BaseTrainer):
         embedding_size: int = 15,  # not used but kept for backwards compatibility
         **kwargs,
     ):
-        super().__init__(optimizer=optimizer, scheduler=scheduler, loss=loss, **kwargs)
+        super().__init__(optimizer=optimizer, scheduler=scheduler, **kwargs)
         # Core model components
         self.encoder = encoder
         self.decoder = decoder
@@ -107,6 +104,7 @@ class InverseDrumMachine(BaseTrainer):
         self.transcription_loss = transcription_loss
         self.embedding_loss = embedding_loss
         self.emedding_size = embedding_size
+        self.reconstruction_loss = loss
 
         self.train_classes = sorted(train_classes) if train_classes is not None else None
         if self.train_classes is None:
@@ -195,15 +193,23 @@ class InverseDrumMachine(BaseTrainer):
         embedding_logits = encoder_outs["embedding_logits"]
         predicted_activations = encoder_outs["activations"]
         onset_logits = predicted_activations["onset"]
+        decoder_inputs = encoder_outs.copy()
+        decoder_inputs["embeddings"] = self._get_conditioning_vector(
+            batch_size, None, predicted_kit_embedding
+        )
+
+        gt_onsets = convert_onset_dict_to_activations(
+            batch["onsets_dict"],
+            batch_size=batch_size,
+            n_frames=onset_logits.shape[-1],
+            instrument_classes=self.train_classes,
+            activation_rate=self.encoder.frame_rate,
+            device=self.device,
+        )
 
         if stage == "train":
             # Prep ground truth onsets
-            gt_onsets = convert_onset_dict_to_activations(
-                batch["onsets_dict"],
-                n_frames=onset_logits.shape[-1],
-                instrument_classes=self.train_classes,
-                activation_rate=self.encoder.frame_rate,
-            )
+
             if self.smooth_targets:
                 # Apply smoothing by adding scaled, shifted versions of the onsets
                 gt_onsets = (
@@ -214,14 +220,10 @@ class InverseDrumMachine(BaseTrainer):
                 gt_onsets = torch.clamp(gt_onsets, 0, 1)  # Ensure values stay in [0, 1]
 
             # Decoder inputs
-            decoder_inputs = encoder_outs.copy()
+
             if self.use_target_embeddings:
                 decoder_inputs["embeddings"] = self._get_conditioning_vector(
                     batch_size, drum_kit_ids
-                )
-            else:
-                decoder_inputs["embeddings"] = self._get_conditioning_vector(
-                    batch_size, drum_kit_ids, predicted_kit_embedding
                 )
 
             # We use gt onsets for conditioning during training
@@ -247,7 +249,7 @@ class InverseDrumMachine(BaseTrainer):
         # Mixture Embedding Loss
         embedding_loss = self.embedding_loss(embedding_logits, drum_kit_ids)
         # Reconstruction Loss
-        reconstruction_loss = self.train_loss(output, mix)
+        reconstruction_loss = self.reconstruction_loss(output, mix)
 
         total_loss = reconstruction_loss + transcription_loss + embedding_loss
 
@@ -279,15 +281,7 @@ class InverseDrumMachine(BaseTrainer):
         return self._shared_step(batch, "train")["loss"]
 
     def validation_step(self, batch: Dict, batch_idx: int):
-        outs = self._shared_step(batch, "val")
-        embeddings = cpu_numpy(outs["embeddings"].reshape(-1, outs["embeddings"].shape[-1]))
-        target_embeddings = cpu_numpy(
-            outs["target_embeddings"].reshape(-1, outs["target_embeddings"].shape[-1])
-        )
-        pred_classes = embeddings[:, self.n_classes :].argmax(axis=1)
-        target_classes = target_embeddings[:, self.n_classes :].argmax(axis=1)
-        self.kit_preds.extend(pred_classes.tolist())
-        self.kit_targets.extend(target_classes.tolist())
+        return self._shared_step(batch, "val")
 
     def on_validation_epoch_end(self):
         """Calculates and logs metrics at the end of the validation epoch."""
