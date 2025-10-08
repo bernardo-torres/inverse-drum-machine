@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import pandas as pd
 import torch
@@ -17,14 +17,14 @@ def get_dataset(
     dataset_split: str,
     sample_rate_target: int,
     version: str,
-    abspath: str = "",
+    root_path: str = "",
     dataset_root: str = None,
-    annotation_root: Optional[Union[str, Path]] = None,
-    mix_metadata_file: Optional[Union[str, Path]] = None,
-    multitrack_metadata_file: Optional[Union[str, Path]] = None,
+    annotation_root: str | Path | None = None,
+    mix_metadata_file: str | Path | None = None,
+    multitrack_metadata_file: str | Path | None = None,
     normalize: bool = False,
     mono: bool = True,
-    gt_sources_path: Optional[str] = None,
+    gt_sources_path: str | None = None,
     duration: int = -1,
     **kwargs,
 ) -> MixOrMultitrackDataset:
@@ -38,8 +38,8 @@ def get_dataset(
 
     filter_audio_fn = split_to_filter_map[dataset_split]
 
-    root_path = Path(abspath) if abspath else Path.cwd()
-    data_root = Path(dataset_root) if dataset_root else root_path / "data_evals" / "StemGMD"
+    root_path = Path(root_path) if root_path else Path.cwd()
+    data_root = Path(dataset_root)
     mix_metadata_file = (
         data_root / "stemgmd_mapping.csv" if mix_metadata_file is None else mix_metadata_file
     )
@@ -98,30 +98,30 @@ class DataModule(LightningDataModule):
         self,
         # Dataset source and structure
         dataset_class: type = MixOrMultitrackDataset,  # Replace with actual dataset class
-        mix_metadata_file: Optional[Union[str, List[str]]] = None,
-        multitrack_metadata_file: Optional[Union[str, List[str]]] = None,
+        mix_metadata_file: str | list[str] | None = None,
+        multitrack_metadata_file: str | list[str] | None = None,
         dataset_root: str = "",
         annotation_root: str = "",
         name: str = "dataset",
         version: str = "full",
         # Data splitting and partitioning
-        split_strategy: Union[str, List[float]] = "predefined",
+        split_strategy: str | list[float] = "predefined",
         train_split: str = "train_train_kits",
         val_split: str = "val_train_kits",
-        val_dataset: Optional[Dataset] = None,
-        test_dataset: Optional[Dataset] = None,
-        cache_partitions: List[str] = ["train", "val", "test"],
+        val_dataset: Dataset | None = None,
+        test_dataset: Dataset | None = None,
+        cache_partitions: list[str] = ["train", "val", "test"],
         # Audio processing
         sample_rate_target: int = 44100,
-        duration: Optional[float] = None,
+        duration: float | None = None,
         random_crop: bool = False,
         normalizing_function: str = "maxabs",
         mono: bool = True,
         backend: str = "soundfile",
         # Advanced features
         dynamic_mixing: bool = False,
-        dynamic_mixing_classes: Optional[List[str]] = None,
-        get_gt_sources: Optional[str] = None,
+        dynamic_mixing_classes: list[str] | None = None,
+        get_gt_sources: str | None = None,
         return_stems: bool = True,
         # Dataloader settings
         batch_size: int = 32,
@@ -134,7 +134,7 @@ class DataModule(LightningDataModule):
         keep_in_memory: bool = False,
         cache_dir: str = "cache",
         # Miscellaneous/debugging
-        filter_audio_fn: Optional[Union[str, list, dict]] = None,
+        filter_audio_fn: str | list | dict | None = None,
         dataset_size_multiplier: int = 1,
         skip_audio_loading: bool = False,
         **dataloader_kwargs,
@@ -144,15 +144,15 @@ class DataModule(LightningDataModule):
         self.save_hyperparameters()
 
         # Placeholders for the datasets
-        self.train_dataset: Optional[Dataset] = None
-        self.val_dataset: Optional[Dataset] = self.hparams.val_dataset
-        self.test_dataset: Optional[Dataset] = self.hparams.test_dataset
+        self.train_dataset: Dataset | None = None
+        self.val_dataset: Dataset | None = self.hparams.val_dataset
+        self.test_dataset: Dataset | None = self.hparams.test_dataset
         self.dataloader_kwargs = dataloader_kwargs
 
     def prepare_data(self) -> None:
         pass
 
-    def setup(self, stage: Optional[str] = None) -> None:
+    def setup(self, stage: str | None = None) -> None:
         """
         Loads metadata and splits the data into train, validation, and test sets.
         This method is called by PyTorch Lightning on of these.
@@ -169,7 +169,7 @@ class DataModule(LightningDataModule):
         else:
             raise ValueError(f"Split strategy '{split_strategy}' not supported.")
 
-    def _get_dataset_kwargs(self) -> Dict[str, Any]:
+    def _get_dataset_kwargs(self) -> dict[str, Any]:
         """Constructs the shared keyword arguments for dataset instantiation."""
         # Define keys to be passed from hparams to the dataset
         hparam_keys = [
@@ -248,7 +248,7 @@ class DataModule(LightningDataModule):
             **self.dataloader_kwargs,
         )
 
-    def val_dataloader(self) -> Optional[DataLoader]:
+    def val_dataloader(self) -> DataLoader | None:
         if self.val_dataset is None:
             return None
 
@@ -262,7 +262,7 @@ class DataModule(LightningDataModule):
             **self.dataloader_kwargs,
         )
 
-    def test_dataloader(self) -> Optional[DataLoader]:
+    def test_dataloader(self) -> DataLoader | None:
         if self.test_dataset is None:
             return None
 
@@ -277,7 +277,7 @@ class DataModule(LightningDataModule):
         )
 
 
-def unified_custom_collate(batch: List[Dict[str, Any]]) -> Dict[str, Any]:
+def unified_custom_collate(batch: list[dict[str, Any]]) -> dict[str, Any]:
     """
     Custom collate function to handle batches of dictionaries with complex types.
     - Stacks tensors using default_collate.

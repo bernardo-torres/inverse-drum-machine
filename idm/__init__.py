@@ -1,5 +1,8 @@
 SILENCE_THRESHOLD = 1e-4
 SILENCE_THRESHOLD_DB = -60
+CHECKPOINT_TYPE_BEST = "val"
+CHECKPOINT_TYPE_LAST = "last"
+
 
 # Hierarchical mapping of drum classes for evaluation
 class_mapping_5_classes = {

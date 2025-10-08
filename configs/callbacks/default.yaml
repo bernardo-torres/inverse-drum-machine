@@ -1,0 +1,29 @@
+every_n_epochs: 75
+
+LogAudio:
+  _target_: idm.callbacks.audio.LogAudioCallback
+  batch_idx_to_log:
+    - 0
+    - 38
+    - 85
+    - 86
+    - 160
+    - 482
+  batch_log_step: 100
+  every_n_epochs: ${callbacks.every_n_epochs}
+  log_gt_samples: false
+  log_reconstructed: false
+  log_reference: false
+  log_samples: false
+  log_stems: true
+  max_figures: 5
+  sr: ${sampling_rate}
+
+model_checkpoint:
+  _target_: lightning.pytorch.callbacks.ModelCheckpoint
+  auto_insert_metric_name: true
+  dirpath: "checkpoints/"
+  filename: "val-{epoch:03d}-{global_step}"
+  mode: "min"
+  monitor: "val/loss"
+  save_last: true
