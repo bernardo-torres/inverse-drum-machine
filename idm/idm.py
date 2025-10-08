@@ -1,15 +1,14 @@
 import os
-from typing import Dict, List, Optional
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from lightning import LightningModule
 from sklearn.metrics import accuracy_score
 
 from idm.decoder.decoder import Decoder
 from idm.feature_extractor.encoder import BaseEncoder
 from idm.run_utils import RankedLogger
+from idm.synthesis_conditioning.embedding import get_conditioning_vector
 from idm.utils import convert_onset_dict_to_activations
 
 log = RankedLogger(__name__, rank_zero_only=True)
@@ -25,7 +24,7 @@ class BaseTrainer(LightningModule):
     def __init__(
         self,
         optimizer: torch.optim.Optimizer = torch.optim.Adam,
-        scheduler: Optional[torch.optim.lr_scheduler.LRScheduler] = None,
+        scheduler: torch.optim.lr_scheduler.LRScheduler | None = None,
         monitor: str = "val/loss",
         sampling_rate: int = 44100,
         output_dir: str = "results",
@@ -83,12 +82,12 @@ class InverseDrumMachine(BaseTrainer):
         transcription_loss: nn.Module = None,
         embedding_loss: nn.Module = None,
         optimizer: torch.optim.Optimizer = torch.optim.Adam,
-        scheduler: Optional[torch.optim.lr_scheduler.LRScheduler] = None,
+        scheduler: torch.optim.lr_scheduler.LRScheduler | None = None,
         augmentations: nn.Module = nn.Identity(),
         n_drum_kits: int = 6,
         version: str = "full",
         sampling_rate: int = 44100,
-        train_classes: Optional[List[str]] = None,
+        train_classes: list[str] | None = None,
         use_target_embeddings: bool = True,
         gt_sequencing: bool = False,
         smooth_targets: bool = False,
@@ -127,58 +126,20 @@ class InverseDrumMachine(BaseTrainer):
         self.fix_gt_sources = fix_gt_sources
 
         # Validation Metrics
-        self.kit_preds: List[int] = []
-        self.kit_targets: List[int] = []
+        self.kit_preds: list[int] = []
+        self.kit_targets: list[int] = []
 
-    def forward(self, mix: torch.Tensor) -> Dict[str, torch.Tensor]:
+    def forward(self, mix: torch.Tensor) -> dict[str, torch.Tensor]:
         """Performs a full forward pass through the encoder and decoder."""
         encoder_outs = self.encoder(mix)
         return self.decoder(**encoder_outs, extra_returns="stems")
 
     def get_conditioning(self, *args, **kwargs):
-        return self._get_conditioning_vector(*args, **kwargs)
+        return get_conditioning_vector(
+            n_classes=self.n_classes, n_drum_kits=self.n_drum_kits, device=self.device, **kwargs
+        )
 
-    def _get_conditioning_vector(
-        self,
-        batch_size: int = 1,
-        drum_kit_ids: torch.Tensor = None,
-        embedding: Optional[torch.Tensor] = None,
-        kit_embedding: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
-        """Constructs the full conditioning vector for the decoder.
-
-        This vector combines a one-hot encoding of the instrument class with
-        either a one-hot or predicted embedding for the drum kit.
-
-        Args:
-            batch_size: The current batch size.
-            drum_kit_ids: The ground truth drum kit indices. Shape: `(B,)`.
-            embedding: The predicted drum kit embedding from the encoder.
-                                 Shape: `(B, n_drum_kits)`.
-            kit_embedding: For backwards compatibility, same as `embedding`.
-
-        Returns:
-            The combined conditioning vector. Shape: `(B, K, D_cond)`.
-        """
-        # Start with one-hot vectors for the instrument classes
-        # Shape: (B, K, K) where K is n_classes
-        class_one_hot = torch.eye(self.n_classes, device=self.device).expand(batch_size, -1, -1)
-        embedding = embedding if embedding is not None else kit_embedding
-
-        if embedding is None:
-            # Use one-hot encoding for the drum kit
-            kit_one_hot = F.one_hot(drum_kit_ids, num_classes=self.n_drum_kits).float()
-            # Expand to match the shape for concatenation: (B, D_kit) -> (B, K, D_kit)
-            kit_conditioning = kit_one_hot.unsqueeze(1).expand(-1, self.n_classes, -1)
-        else:
-            # Use the predicted embedding from the encoder
-            # Expand to match shape: (B, D_kit) -> (B, K, D_kit)
-            kit_conditioning = embedding.unsqueeze(1).expand(-1, self.n_classes, -1)
-
-        # Concatenate class and kit conditioning vectors
-        return torch.cat([class_one_hot, kit_conditioning], dim=-1)
-
-    def _shared_step(self, batch: Dict, stage: str) -> Dict:
+    def _shared_step(self, batch: dict, stage: str) -> dict:
         """Performs a shared step for training, validation, and testing."""
         mix = batch["mix"]
         drum_kit_ids = batch["drum_kit"]
@@ -194,8 +155,12 @@ class InverseDrumMachine(BaseTrainer):
         predicted_activations = encoder_outs["activations"]
         onset_logits = predicted_activations["onset"]
         decoder_inputs = encoder_outs.copy()
-        decoder_inputs["embeddings"] = self._get_conditioning_vector(
-            batch_size, None, predicted_kit_embedding
+        decoder_inputs["embeddings"] = get_conditioning_vector(
+            batch_size=batch_size,
+            n_classes=self.n_classes,
+            n_drum_kits=self.n_drum_kits,
+            drum_kit_ids=None,
+            embedding=predicted_kit_embedding,
         )
 
         gt_onsets = convert_onset_dict_to_activations(
@@ -222,8 +187,15 @@ class InverseDrumMachine(BaseTrainer):
             # Decoder inputs
 
             if self.use_target_embeddings:
-                decoder_inputs["embeddings"] = self._get_conditioning_vector(
-                    batch_size, drum_kit_ids
+                # decoder_inputs["embeddings"] = self._get_conditioning_vector(
+                #     batch_size, drum_kit_ids
+                # )
+                decoder_inputs["embeddings"] = get_conditioning_vector(
+                    batch_size=batch_size,
+                    n_classes=self.n_classes,
+                    n_drum_kits=self.n_drum_kits,
+                    drum_kit_ids=drum_kit_ids,
+                    embedding=None,
                 )
 
             # We use gt onsets for conditioning during training
@@ -277,10 +249,10 @@ class InverseDrumMachine(BaseTrainer):
             )
         return returns
 
-    def training_step(self, batch: Dict, batch_idx: int) -> torch.Tensor:
+    def training_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
         return self._shared_step(batch, "train")["loss"]
 
-    def validation_step(self, batch: Dict, batch_idx: int):
+    def validation_step(self, batch: dict, batch_idx: int):
         return self._shared_step(batch, "val")
 
     def on_validation_epoch_end(self):
@@ -291,7 +263,7 @@ class InverseDrumMachine(BaseTrainer):
             self.kit_preds.clear()
             self.kit_targets.clear()
 
-    def test_step(self, batch: Dict, batch_idx: int):
+    def test_step(self, batch: dict, batch_idx: int):
         """The test step for the model."""
         self._shared_step(batch, "test")
 
