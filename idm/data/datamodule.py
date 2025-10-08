@@ -60,8 +60,7 @@ def get_dataset(
     on_train = "train" in split_key
     if not on_train:
         # For validation and test, only use the official eval sessions
-        metadata_subset.sort_values("duration")
-
+        metadata_subset.sort_values("duration", inplace=True)
     return MixOrMultitrackDataset(
         name=f"stemgmd_{dataset_split}",
         normalizing_function="maxabs",
