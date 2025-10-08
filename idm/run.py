@@ -2,7 +2,7 @@ import sys
 import traceback
 import warnings
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import hydra
 import lightning as L
@@ -31,7 +31,7 @@ log = RankedLogger(__name__, rank_zero_only=True)
 register_resolvers()
 
 
-def instantiate_components(cfg: Optional[DictConfig], component_type: str) -> List[Any]:
+def instantiate_components(cfg: DictConfig | None, component_type: str) -> list[Any]:
     """
     Instantiates a list of components (e.g., callbacks, loggers) from a config.
 
@@ -42,7 +42,7 @@ def instantiate_components(cfg: Optional[DictConfig], component_type: str) -> Li
     Returns:
         A list of instantiated components.
     """
-    components: List[Any] = []
+    components: list[Any] = []
 
     if not cfg:
         log.warning(f"No {component_type} configs found! Skipping...")
@@ -71,11 +71,11 @@ class TrainingPipeline:
         """
         self.cfg = cfg
         self.cfg_data = OmegaConf.to_container(cfg, resolve=True)
-        self.trainer: Optional[Trainer] = None
-        self.model: Optional[LightningModule] = None
-        self.datamodule: Optional[LightningDataModule] = None
-        self.callbacks: Optional[List[Callback]] = None
-        self.logger: Optional[List[Logger]] = None
+        self.trainer: Trainer | None = None
+        self.model: LightningModule | None = None
+        self.datamodule: LightningDataModule | None = None
+        self.callbacks: list[Callback] | None = None
+        self.logger: list[Logger] | None = None
 
     def _instantiate_objects(self) -> None:
         """Instantiates all necessary objects from the configuration."""
@@ -143,7 +143,7 @@ class TrainingPipeline:
             return
 
         log.info("Starting training!")
-        ckpt_path = find_checkpoint(self.cfg.paths.output_dir, type=CHECKPOINT_TYPE_LAST)
+        ckpt_path = find_checkpoint(self.cfg.paths.output_dir, ckpt_type=CHECKPOINT_TYPE_LAST)
         if ckpt_path:
             log.info(f"Resuming training from checkpoint: {ckpt_path}")
 
@@ -160,10 +160,12 @@ class TrainingPipeline:
         if not ckpt_path:
             log.warning("Best checkpoint not found in trainer, searching output directory.")
             ckpt_path = find_checkpoint(
-                self.cfg.paths.output_dir, type=CHECKPOINT_TYPE_BEST, filename_contains="val"
+                self.cfg.paths.output_dir, ckpt_type=CHECKPOINT_TYPE_BEST, filename_contains="val"
             )
             if not ckpt_path:
-                ckpt_path = find_checkpoint(self.cfg.paths.output_dir, type=CHECKPOINT_TYPE_LAST)
+                ckpt_path = find_checkpoint(
+                    self.cfg.paths.output_dir, ckpt_type=CHECKPOINT_TYPE_LAST
+                )
                 log.info("Falling back to last checkpoint found for testing.")
 
         if not ckpt_path:
@@ -173,7 +175,7 @@ class TrainingPipeline:
 
         self.trainer.test(model=self.model, datamodule=self.datamodule, ckpt_path=ckpt_path)
 
-    def run(self) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    def run(self) -> tuple[dict[str, Any], dict[str, Any]]:
         """Runs the complete pipeline: setup, train, and test.
 
         Returns:
@@ -214,7 +216,7 @@ class TrainingPipeline:
         return metric_dict, object_dict
 
 
-def save_and_process_results(cfg: DictConfig, metric_dict: Dict[str, Any]) -> None:
+def save_and_process_results(cfg: DictConfig, metric_dict: dict[str, Any]) -> None:
     """Saves metrics to a CSV file and generates LaTeX output.
 
     Args:
@@ -238,7 +240,7 @@ def save_and_process_results(cfg: DictConfig, metric_dict: Dict[str, Any]) -> No
 
 
 @hydra.main(config_path="../configs", config_name="train.yaml")
-def main(cfg: DictConfig) -> Optional[float]:
+def main(cfg: DictConfig) -> float | None:
     """
     Main entry point for training, controlled by Hydra.
 
