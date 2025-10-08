@@ -29,6 +29,7 @@ def fast_conv1d(signal: torch.Tensor, kernel: torch.Tensor) -> torch.Tensor:
         kernel = kernel.unsqueeze(0)
 
     kernel_batch, kernel_len = kernel.shape
+    kernel = kernel.unsqueeze(1)  # Shape: (B or 1, 1, T_ker)
     if not (kernel_batch == batch or kernel_batch == 1):
         raise ValueError(
             f"Kernel batch size ({kernel_batch}) must be 1 or match signal batch size ({batch})."
