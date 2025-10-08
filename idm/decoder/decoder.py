@@ -1,11 +1,11 @@
 from functools import partial
-from typing import Dict, List, Optional
 
 import torch
 import torch.nn as nn
 from einops import rearrange
 
 from idm.components import IdentityWithKwargs
+from idm.synthesis_conditioning.embedding import get_conditioning_vector
 from idm.synthesis_conditioning.peak_picking import PeakPicking
 from idm.utils import get_act_functional
 
@@ -31,7 +31,7 @@ class Decoder(nn.Module):
         peak_picking: nn.Module = IdentityWithKwargs(),
         sample_synth: nn.Module = nn.Identity(),
         sequencer: nn.Module = nn.Identity(),
-        processors: Optional[nn.Module] = None,
+        processors: nn.Module | None = None,
         sampling_rate: int = 16000,
         sample_duration: float = 1.0,
         activation: str = "sigmoid",
@@ -65,22 +65,22 @@ class Decoder(nn.Module):
 
     def forward(
         self,
-        activations: Dict[str, torch.Tensor],
-        embeddings: Optional[torch.Tensor] = None,
-        frame_features: Optional[torch.Tensor] = None,
-        extra_returns: Optional[List[str]] = None,
+        activations: dict[str, torch.Tensor],
+        embeddings: torch.Tensor | None = None,
+        frame_features: torch.Tensor | None = None,
+        extra_returns: list[str] | None = None,
         apply_sigmoid: bool = True,
-        activation_rate: Optional[int] = None,
-        override_onsets: Optional[torch.Tensor] = None,
-        override_samples: Optional[torch.Tensor] = None,
+        activation_rate: int | None = None,
+        override_onsets: torch.Tensor | None = None,
+        override_samples: torch.Tensor | None = None,
         **kwargs,
-    ) -> Dict[str, torch.Tensor]:
+    ) -> dict[str, torch.Tensor]:
         """Generates audio from activations and embeddings. Both activations and audio samples
         can be optionally overridden.
 
         Args:
             activations: A dictionary containing at least 'onset' and 'velocity' tensors.
-                         Shape: (B, K, T) where K is the number of instruments.
+                         Shape: (B, K, M) where K is the number of instruments.
             embeddings: Latent representations for sample synthesis. Shape: (B, K, D).
             frame_features: Additional features for post-processing modules.
             extra_returns: A list of strings specifying extra tensors to return,
@@ -116,11 +116,18 @@ class Decoder(nn.Module):
             onsets = self.activation(onset_logits) if apply_sigmoid else onset_logits
             onsets = pick_peaks(onsets)
 
+        B, K, M = onsets.shape
         # Synthesize one-shot samples unless they are provided externally.
         if override_samples is not None:
             samples = override_samples
         else:
             # We synthesize samples for all instruments in the batch at once.
+            if embeddings.ndim == 2:
+                embeddings = get_conditioning_vector(
+                    n_classes=K,
+                    embedding=embeddings,
+                    batch_size=B,
+                )
             embeddings_flat = rearrange(embeddings, "b k d -> (b k) d")
             noise = torch.randn(
                 embeddings_flat.size(0), 1, self.sample_duration_samples, device=embeddings.device
