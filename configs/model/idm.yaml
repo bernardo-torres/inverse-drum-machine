@@ -1,0 +1,104 @@
+_target_: idm.idm.InverseDrumMachine
+sampling_rate: ${sampling_rate}
+n_drum_kits: ${n_drum_kits}
+train_classes: ${train_classes}
+embedding_size: ${eval:'${get_n_of_classes:${model.train_classes}} + ${model.n_drum_kits}'}
+
+optimizer:
+  _target_: torch.optim.Adam
+  _partial_: True
+  lr: 0.005
+
+loss:
+  # Note: MultiScaleLoss is not fully implemented in idm/losses.py
+  _target_: idm.losses.MultiScaleLoss
+  fft_sizes: [2048, 1024, 512, 256]
+  hop_sizes: [512, 256, 128, 64]
+  win_lengths: [2048, 1024, 512, 256]
+  w_lin_mag: 1.0
+  w_log_mag: 1.0
+
+transcription_loss:
+  _target_: torch.nn.BCEWithLogitsLoss
+
+embedding_loss:
+  _target_: torch.nn.CrossEntropyLoss
+
+encoder:
+  _target_: idm.feature_extractor.encoder.Encoder
+  sampling_rate: ${model.sampling_rate}
+  transform:
+    _target_: idm.feature_extractor.mel.MelSpectrogram
+    sample_rate: ${model.sampling_rate}
+    n_fft: 1024
+    hop_length: 256
+    n_mels: 128
+    log: True
+  backbone:
+    _target_: idm.feature_extractor.convnext.ConvNeXt
+    input_channels: 1
+    # dims: [4, 8, 16, ${feature_dim}]
+    dims:
+      - 4
+      - 8
+      - 16
+      - ${feature_dim}
+    kernel_size: 7
+    downsample: false
+    drop_path_rate: 0.0
+  pooling:
+    _target_: idm.synthesis_conditioning.embedding.DrumKitClassifier
+    in_features: ${feature_dim}
+    n_drum_kits: ${model.n_drum_kits}
+  transcription_head:
+    _target_: idm.synthesis_conditioning.transcription.TranscriptionHead
+    input_dim: ${feature_dim}
+    n_classes: ${eval:'len(${model.train_classes})'}
+    sequence_model:
+      _target_: torch.nn.Identity
+    activation: "relu"
+    onset_activation: "none"
+    velocity_activation: "exp_sigmoid"
+    kernel_size: 7
+  embedding_norm:
+    _target_: torch.nn.Softmax
+    dim: -1
+
+decoder:
+  _target_: idm.decoder.decoder.Decoder
+  sampling_rate: ${model.sampling_rate}
+  sample_duration: ${sample_duration}
+  sequencer:
+    _target_: idm.decoder.sequencer.FastDrumSequencerWithMixer
+    n_notes: ${eval:'len(${model.train_classes})'}
+    upsampler:
+      _target_: idm.decoder.sequencer.ZeroInserter
+      insertion_rate: ${model.encoder.transform.hop_length}
+  peak_picking:
+    _target_: idm.components.IdentityWithKwargs
+  sample_synth:
+    _target_: idm.decoder.one_shot_synth.TransientTCNWithEnvelope
+    sample_rate: ${model.sampling_rate}
+    in_channels: 1
+    out_channels: 1
+    hidden_channels: 48
+    kernel_size: 15
+    dilation_base: 2
+    num_layers: 12
+    dilation_blocks: 12
+    n_tracks: ${eval:'len(${model.train_classes})'}
+    film_embedding_size: ${model.embedding_size}
+    film_conditioning: True
+    film_batch_norm: False
+    norm: "instance"
+    interpolation_method: "window"
+    num_envelope_points: 10
+    envelope_mode: "exponential"
+    normalize_output: True
+  processors:
+    _target_: idm.decoder.synth.MultiTrackTimeVaryingGain
+    n_tracks: ${eval:'len(${model.train_classes})'}
+    latent_size: ${feature_dim}
+    hidden_size: 8
+    interpolate: False
+    downsampling_factor: -1
