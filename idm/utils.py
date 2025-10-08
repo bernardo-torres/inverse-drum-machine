@@ -23,6 +23,7 @@ def convert_onset_dict_to_activations(
     batch_size: int = 1,
     label_mapping: Optional[Dict[str, str]] = None,
     activation_rate: float = None,
+    device: Optional[torch.device] = None,
 ) -> torch.Tensor:
     """Converts a dictionary of onset times into a multi-channel activation tensor.
 
@@ -42,7 +43,8 @@ def convert_onset_dict_to_activations(
         number of instrument classes, and M is `n_frames`.`1` indicates an onset.
     """
     n_classes = len(instrument_classes)
-    activations = torch.zeros((batch_size, n_classes, n_frames))
+    activations = torch.zeros((batch_size, n_classes, n_frames), device=device)
+
     if label_mapping is None:
         label_mapping = {key: key for key in instrument_classes}
 
@@ -136,7 +138,7 @@ def get_act_functional(act_name, **kwargs):
     # elif act_name == "snake":
     #     return Snake(**kwargs)
     # elif act_name == "snake_cuda":
-    #     from src.utils.alias_free_activation.cuda.activation1d import Activation1d
+    #     from idm.utils.alias_free_activation.cuda.activation1d import Activation1d
 
     #     snake = Snake(alpha_logscale=True, **kwargs)
     #     return Activation1d(snake)
