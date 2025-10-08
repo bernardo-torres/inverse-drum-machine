@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import pandas as pd
@@ -6,11 +7,82 @@ from lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset
 from torch.utils.data.dataloader import default_collate
 
+from idm import split_to_filter_map
+
 # Assuming the dataset class from the previous refactor is available
 from idm.data.dataset import MixOrMultitrackDataset
 
-# Placeholder for Hydra/OmegaConf config types
-ListConfig = list
+
+def get_dataset(
+    dataset_split: str,
+    sample_rate_target: int,
+    version: str,
+    abspath: str = "",
+    dataset_root: str = None,
+    annotation_root: Optional[Union[str, Path]] = None,
+    mix_metadata_file: Optional[Union[str, Path]] = None,
+    multitrack_metadata_file: Optional[Union[str, Path]] = None,
+    normalize: bool = False,
+    mono: bool = True,
+    gt_sources_path: Optional[str] = None,
+    duration: int = -1,
+    **kwargs,
+) -> MixOrMultitrackDataset:
+    """Creates and configures the evaluation dataset based on the specified split."""
+    # Using a dictionary mapping is a safe refactor that improves readability
+
+    if dataset_split not in split_to_filter_map:
+        raise ValueError(
+            f"Unknown dataset split '{dataset_split}'. Valid options: {list(split_to_filter_map.keys())}"
+        )
+
+    filter_audio_fn = split_to_filter_map[dataset_split]
+
+    root_path = Path(abspath) if abspath else Path.cwd()
+    data_root = Path(dataset_root) if dataset_root else root_path / "data_evals" / "StemGMD"
+    mix_metadata_file = (
+        data_root / "stemgmd_mapping.csv" if mix_metadata_file is None else mix_metadata_file
+    )
+    metadata_df = pd.read_csv(mix_metadata_file, header=0)
+    multitrack_metadata_file = (
+        data_root / "stemgmd_separation_mapping.csv"
+        if multitrack_metadata_file is None
+        else multitrack_metadata_file
+    )
+    multitrack_metadata_df = pd.read_csv(multitrack_metadata_file, header=0)
+
+    split_map = {"eval_session": "test", "val": "validation", "test": "test", "train": "train"}
+    split_key = next((k for k in split_map if k in dataset_split), None)
+    if split_key is None:
+        raise ValueError(f"Split type could not be determined from '{dataset_split}'")
+
+    metadata_subset = metadata_df[metadata_df["split"] == split_map[split_key]]
+    on_train = "train" in split_key
+    if not on_train:
+        # For validation and test, only use the official eval sessions
+        metadata_subset.sort_values("duration")
+
+    return MixOrMultitrackDataset(
+        name=f"stemgmd_{dataset_split}",
+        normalizing_function="maxabs",
+        sample_rate_target=sample_rate_target,
+        version=version,
+        duration=duration,
+        mono=mono,
+        random_crop=on_train,
+        dataset_root=str(data_root),
+        annotation_root=data_root / "annotations" if annotation_root is None else annotation_root,
+        mix_metadata=metadata_subset,
+        multitrack_metadata=multitrack_metadata_df,
+        filter_audio_fn=filter_audio_fn,
+        get_gt_sources=(
+            Path(gt_sources_path) if gt_sources_path else "data_drum_sources/Stem_GMD_single_hits"
+        ),
+        # cache_dir=str(root_path / "cache"),
+        cache_hdf5=False,
+        normalize=normalize,
+        **kwargs,
+    )
 
 
 class DataModule(LightningDataModule):
@@ -33,7 +105,9 @@ class DataModule(LightningDataModule):
         name: str = "dataset",
         version: str = "full",
         # Data splitting and partitioning
-        split: Union[str, List[float]] = "predefined",
+        split_strategy: Union[str, List[float]] = "predefined",
+        train_split: str = "train_train_kits",
+        val_split: str = "val_train_kits",
         val_dataset: Optional[Dataset] = None,
         test_dataset: Optional[Dataset] = None,
         cache_partitions: List[str] = ["train", "val", "test"],
@@ -84,19 +158,14 @@ class DataModule(LightningDataModule):
         This method is called by PyTorch Lightning on of these.
         """
         # We only need to set up datasets for 'fit' stage
-        if stage not in ("fit", None):
-            return
+        # if stage not in ("fit", None):
+        #     return
 
-        split_strategy = self.hparams.split
+        split_strategy = self.hparams.split_strategy
         if split_strategy == "predefined":
             self._setup_predefined_split()
-        elif split_strategy == "overfit":
+        elif split_strategy == "overfit" or split_strategy == "debug":
             self._setup_overfit_split()
-        elif split_strategy in ["random", "none"] or isinstance(
-            split_strategy, (list, tuple, ListConfig)
-        ):
-            # Implement other split strategies or use pre-assigned datasets
-            pass
         else:
             raise ValueError(f"Split strategy '{split_strategy}' not supported.")
 
@@ -104,22 +173,23 @@ class DataModule(LightningDataModule):
         """Constructs the shared keyword arguments for dataset instantiation."""
         # Define keys to be passed from hparams to the dataset
         hparam_keys = [
-            "dataset_root",
-            "annotation_root",
+            # "dataset_root",
+            # "annotation_root",
             "backend",
-            "filter_audio_fn",
+            # "filter_audio_fn",
             "dataset_size_multiplier",
             "version",
-            "get_gt_sources",
+            # "get_gt_sources",
             "skip_audio_loading",
             "sample_rate_target",
-            "normalizing_function",
-            "mono",
+            # "normalizing_function",
+            # "mono",
             "dynamic_mixing",
             "dynamic_mixing_classes",
             "return_stems",
             "keep_in_memory",
             "cache_dir",
+            "duration",
         ]
         return {key: self.hparams[key] for key in hparam_keys}
 
@@ -128,45 +198,24 @@ class DataModule(LightningDataModule):
         if not self.hparams.mix_metadata_file:
             raise ValueError("mix_metadata_file is required for 'predefined' split.")
 
-        full_metadata = pd.read_csv(self.hparams.mix_metadata_file, header=0)
-        multitrack_metadata = (
-            pd.read_csv(self.hparams.multitrack_metadata_file, header=0)
-            if self.hparams.multitrack_metadata_file
-            else None
-        )
-
-        # Filter metadata for train and validation sets
-        train_meta = full_metadata[full_metadata["split"] == "train"].copy()
-        val_meta = full_metadata[full_metadata["split"] == "validation"].copy()
-
-        # Verify no data leakage
-        train_files = set(train_meta["Full Audio Path"])
-        val_files = set(val_meta["Full Audio Path"])
-        if train_files.intersection(val_files):
-            raise RuntimeError("Overlap detected between train and validation sets.")
-
-        val_meta = val_meta.sort_values("duration")
         ds_kwargs = self._get_dataset_kwargs()
 
-        self.train_dataset = self.hparams.dataset_class(
-            name=f"{self.hparams.name}_train",
-            mix_metadata=train_meta,
-            multitrack_metadata=multitrack_metadata,
-            random_crop=self.hparams.random_crop,
-            duration=self.hparams.duration,
-            cache_hdf5="train" in self.hparams.cache_partitions and self.hparams.cache_hdf5,
+        self.train_dataset = get_dataset(
+            dataset_split=self.hparams.train_split,
+            dataset_root=self.hparams.dataset_root,
+            **ds_kwargs,
+        )
+        self.val_dataset = get_dataset(
+            dataset_split=self.hparams.val_split,
+            dataset_root=self.hparams.dataset_root,
             **ds_kwargs,
         )
 
-        self.val_dataset = self.hparams.dataset_class(
-            name=f"{self.hparams.name}_val",
-            mix_metadata=val_meta,
-            multitrack_metadata=multitrack_metadata,
-            random_crop=False,  # Validation should be deterministic
-            duration=None,  # Typically evaluate on full files
-            cache_hdf5="val" in self.hparams.cache_partitions and self.hparams.cache_hdf5,
-            **ds_kwargs,
-        )
+        # Verify no data leakage
+        train_files = set(self.train_dataset.mix_metadata[:, 1])
+        val_files = self.val_dataset.mix_metadata[:, 1]
+        if train_files.intersection(val_files):
+            raise RuntimeError("Overlap detected between train and validation sets.")
 
     def _setup_overfit_split(self) -> None:
         """Configures train and validation sets to use the same data for overfitting checks."""
@@ -174,28 +223,20 @@ class DataModule(LightningDataModule):
         if not self.hparams.mix_metadata_file:
             raise ValueError("mix_metadata_file is required for 'overfit' split.")
 
-        full_metadata = pd.read_csv(self.hparams.mix_metadata_file, header=0)
-        overfit_meta = full_metadata.head(self.hparams.batch_size)  # Use one batch
-
         ds_kwargs = self._get_dataset_kwargs()
 
-        # Instantiate the same dataset for both train and val
-        overfit_dataset = self.hparams.dataset_class(
-            name=f"{self.hparams.name}_overfit",
-            mix_metadata=overfit_meta,
-            random_crop=self.hparams.random_crop,
-            duration=self.hparams.duration,
-            cache_hdf5=False,  # Caching is likely not beneficial for overfitting
+        self.train_dataset = get_dataset(
+            dataset_split=self.hparams.train_split,
+            dataset_root=self.hparams.dataset_root,
+            mix_metadata_file=self.hparams.mix_metadata_file,
             **ds_kwargs,
         )
-        self.train_dataset = overfit_dataset
-        self.val_dataset = overfit_dataset
+        self.train_dataset.mix_metadata = self.train_dataset.mix_metadata[: self.hparams.batch_size]
+        self.val_dataset = self.train_dataset
 
     def train_dataloader(self) -> DataLoader:
         if self.train_dataset is None:
             raise RuntimeError("Training dataset not initialized. Call setup() first.")
-        if self.samples_dataset_train:
-            self.train_dataset.set_audio_samples_dataset(self.samples_dataset_train)
 
         return DataLoader(
             self.train_dataset,
