@@ -1,5 +1,3 @@
-from typing import Optional
-
 import torch
 import torchaudio
 
@@ -14,12 +12,12 @@ class MelSpectrogram(BaseTransform):
         sample_rate: int = None,
         n_fft: int = 1024,
         n_mels: int = 128,
-        hop_length: Optional[int] = None,
-        win_length: Optional[int] = None,
+        hop_length: int | None = None,
+        win_length: int | None = None,
         f_min: float = 0.0,
-        f_max: Optional[float] = None,
+        f_max: float | None = None,
         log: bool = False,
-        padding_divisor: Optional[int] = None,
+        padding_divisor: int | None = None,
         pad_left_right: bool = False,
         center: bool = True,
     ):
@@ -44,20 +42,10 @@ class MelSpectrogram(BaseTransform):
         self.log = log
 
     def forward(self, x: torch.Tensor, adjust_padding: bool = True) -> torch.Tensor:
-        # Handle reshaping
         x, x_shape = self._reshape_input(x)
-
-        # Handle padding
         x = self._handle_padding(x, adjust_padding)
-
-        # Compute mel spectrogram
         mel = self.mel_transform(x)
-
-        # Apply log if requested
         if self.log:
             mel = torch.log(mel + 1e-6)
-
-        # Reshape back
         mel = self._reshape_output(mel, x_shape)
-
         return mel

@@ -1,5 +1,4 @@
 import copy
-from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -10,7 +9,7 @@ class BaseTransform(nn.Module):
     """Base class for time-frequency transforms."""
 
     def __init__(
-        self, padding_divisor: Optional[int] = None, pad_left_right: bool = False, **fft_kwargs
+        self, padding_divisor: int | None = None, pad_left_right: bool = False, **fft_kwargs
     ):
         super().__init__()
         self.fft_kwargs = fft_kwargs
@@ -44,7 +43,7 @@ class BaseTransform(nn.Module):
 
         return _x
 
-    def _reshape_input(self, x: torch.Tensor) -> Tuple[torch.Tensor, tuple]:
+    def _reshape_input(self, x: torch.Tensor) -> tuple[torch.Tensor, tuple]:
         """Reshape input to 2D and keep original shape."""
 
         if not isinstance(x, torch.Tensor):
@@ -92,13 +91,13 @@ class STFT(BaseTransform):
     def __init__(
         self,
         n_fft: int = 2048,
-        hop_length: Optional[int] = None,
-        win_length: Optional[int] = None,
-        window: Optional[torch.Tensor] = None,
+        hop_length: int | None = None,
+        win_length: int | None = None,
+        window: torch.Tensor | None = None,
         magnitude: bool = True,
         center: bool = True,
         log: bool = False,
-        padding_divisor: Optional[int] = None,
+        padding_divisor: int | None = None,
         pad_left_right: bool = False,
     ):
         fft_kwargs = {
@@ -121,29 +120,20 @@ class STFT(BaseTransform):
         self, x: torch.Tensor, adjust_padding: bool = True, return_complex: bool = False
     ) -> torch.Tensor:
         """x: Tensor of shape [batch, time]. If not, will be reshaped and all dims (except last) will be transferred to batch."""
-
         x, x_shape = self._reshape_input(x)
-
-        # Handle padding
         x = self._handle_padding(x, adjust_padding)
-
         # Compute STFT
         stft = torch.stft(x, **self.fft_kwargs)
-
         # Post-process
         if self.magnitude:
             stft = stft.abs()
             if self.log:
                 stft = torch.log(stft + 1e-6)
-
         # Reshape back
         stft = self._reshape_output(stft, x_shape)
-
         return stft
 
-    def inverse(
-        self, X: torch.Tensor, length: Optional[int] = None, n_iter: int = 32
-    ) -> torch.Tensor:
+    def inverse(self, X: torch.Tensor, length: int | None = None, n_iter: int = 32) -> torch.Tensor:
         """Inverse STFT with optional Griffin-Lim phase reconstruction."""
         # Handle complex input
         if X.size(-1) == 2:
@@ -156,9 +146,9 @@ class STFT(BaseTransform):
 
         # If magnitude-only, perform Griffin-Lim
         if not X.is_complex():
-            X = self._griffin_lim(X, n_iter)
+            # X = self._griffin_lim(X, n_iter)
+            raise NotImplementedError("Griffin-Lim not implemented.")
 
-        # Inverse STFT
         x = torch.istft(X, **self.ifft_kwargs, length=length)
 
         # Reshape if necessary
@@ -166,16 +156,3 @@ class STFT(BaseTransform):
             x = x.view(*original_shape[:-2], -1)
 
         return x
-
-    def _griffin_lim(self, S: torch.Tensor, n_iter: int) -> torch.Tensor:
-        """Griffin-Lim algorithm for phase reconstruction."""
-        angles = torch.exp(2j * torch.pi * torch.rand_like(S))
-        X = S * angles
-
-        for _ in range(n_iter):
-            x = torch.istft(X, **self.kwargs)
-            X = torch.stft(x, **self.kwargs)
-            angles = torch.exp(1j * torch.angle(X))
-            X = S * angles
-
-        return X

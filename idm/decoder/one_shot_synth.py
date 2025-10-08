@@ -1,4 +1,6 @@
-from typing import Literal, Optional
+# Mostly taken from https://github.com/jorshi/drumblender
+
+from typing import Literal
 
 import torch
 import torch.nn as nn
@@ -73,10 +75,10 @@ class _DilatedResidualBlock(nn.Module):
         norm: Literal["batch", "instance", None] = None,
         activation: str = "GELU",
         film_conditioning: bool = False,
-        film_embedding_size: Optional[int] = None,
+        film_embedding_size: int | None = None,
         film_batch_norm: bool = True,
         use_temporal_film: bool = False,
-        temporal_film_block_size: Optional[int] = None,
+        temporal_film_block_size: int | None = None,
     ):
         super().__init__()
 
@@ -137,7 +139,7 @@ class _DilatedResidualBlock(nn.Module):
         self.tfilm = TFiLM(out_channels, temporal_film_block_size) if use_temporal_film else None
         self.residual = nn.Conv1d(in_channels, out_channels, 1)
 
-    def forward(self, x: torch.Tensor, film_embedding: Optional[torch.Tensor] = None):
+    def forward(self, x: torch.Tensor, film_embedding: torch.Tensor | None = None):
         activations = self.net(x)
         if self.film is not None:
             activations = self.film(activations, film_embedding)
@@ -183,17 +185,17 @@ class TCN(nn.Module):
         hidden_channels: int,
         out_channels: int,
         dilation_base: int = 2,
-        dilation_blocks: Optional[int] = None,
+        dilation_blocks: int | None = None,
         num_layers: int = 8,
         kernel_size: int = 3,
         causal: bool = True,
         norm: Literal["batch", "instance", None] = None,
         activation: str = "GELU",
         film_conditioning: bool = False,
-        film_embedding_size: Optional[int] = None,
+        film_embedding_size: int | None = None,
         film_batch_norm: bool = True,
         use_temporal_film: bool = False,
-        temporal_film_block_size: Optional[int] = None,
+        temporal_film_block_size: int | None = None,
         noise_padding: bool = False,  # Pad left with noise
         pad_input: bool = True,
     ):
@@ -239,7 +241,7 @@ class TCN(nn.Module):
                 torch.randn(1, 1, get_tcn_input_padding(kernel_size, self.num_layers, causal=True)),
             )
 
-    def forward(self, x: torch.Tensor, film_embedding: Optional[torch.Tensor] = None):
+    def forward(self, x: torch.Tensor, film_embedding: torch.Tensor | None = None):
         if self.noise_padding:
             # We pad the input with noise so that the output of the TCN is the same length as the input
             # pad_amount = get_tcn_input_padding([self.kernel_size] * len(self.dilations), self.dilations, causal=True)
@@ -276,11 +278,11 @@ class TransientTCN(nn.Module):
         hidden_channels: int = 32,
         out_channels: int = 1,
         dilation_base: int = 2,
-        dilation_blocks: Optional[int] = None,
+        dilation_blocks: int | None = None,
         num_layers: int = 8,
         kernel_size: int = 13,
         film_conditioning: bool = False,
-        film_embedding_size: Optional[int] = None,
+        film_embedding_size: int | None = None,
         film_batch_norm: bool = True,
         transient_conditioning: bool = False,
         transient_conditioning_channels: int = 32,
@@ -330,7 +332,7 @@ class TransientTCN(nn.Module):
     def get_envelope(self, embedding, envelope_length):
         return torch.ones(embedding.size(0), 1, envelope_length, device=embedding.device)
 
-    def forward(self, x: torch.Tensor, embedding: Optional[torch.Tensor] = None):
+    def forward(self, x: torch.Tensor, embedding: torch.Tensor | None = None):
         if hasattr(self, "transient_conditioning"):
             cond = repeat(self.transient_conditioning, "1 c l -> b c l", b=x[0].size(0))
             cond = torch.nn.functional.pad(cond, (0, x[0].size(-1) - cond.size(-1)))
