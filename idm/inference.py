@@ -1,9 +1,17 @@
+import os
+import re
 from pathlib import Path
 
 import hydra
 import rootutils
+import soundfile as sf
 import torch
+import torch.nn as nn
+import torchaudio
 from omegaconf import OmegaConf
+
+from idm import CHECKPOINT_TYPE_BEST, CHECKPOINT_TYPE_LAST
+from idm.feature_extractor.stft import STFT
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 ROOT_PATH = Path(rootutils.find_root())
@@ -28,7 +36,7 @@ def load_model(identifier, device):
             wiener_filter=False,
             device=device,
             wiener_exponent=1.0,
-            config=ROOT_PATH / "baselines/larsnet/config.yaml",
+            config=ROOT_PATH / "configs/baselines/larsnet/config.yaml",
             train_classes=[
                 "CY_CR",
                 "CY_RD",
@@ -55,11 +63,14 @@ def load_model(identifier, device):
     else:  # Assume it's a hash for a trained model
         # log_dir = Path("logs/train/dora_xps/grids/")
         log_dir = ROOT_PATH / "logs"
-        ckpt_path = find_ckpt_from_hash(log_dir, identifier, type="val")
+        # ckpt_path = find_ckpt_from_hash(log_dir, identifier, type="val")
+        ckpt_path = find_checkpoint(
+            log_dir, version_id=identifier, ckpt_type=CHECKPOINT_TYPE_BEST, filename_contains="val"
+        )
         name = identifier
         if not ckpt_path:
             raise FileNotFoundError(f"Could not find checkpoint for hash {identifier} in {log_dir}")
-        print(f"Found checkpoint at: {ckpt_path}")
+        print(f"Found checkpoint at: {os.path.relpath(ckpt_path, ROOT_PATH)}")
         exp_dir = Path(ckpt_path).parent.parent
         config_path = exp_dir / ".hydra" / "config_resolved.yaml"
     model_cfg = OmegaConf.load(config_path).model
@@ -74,7 +85,8 @@ def load_model_from_hash(model_hash: str, logs_dir: str = "logs/train/dora_xps/g
     """
     Loads a model from a given hash.
     """
-    ckpt_path = find_ckpt_from_hash(logs_dir, model_hash)
+    # ckpt_path = find_ckpt_from_hash(logs_dir, model_hash)
+    ckpt_path = find_checkpoint(logs_dir, version_id=model_hash, ckpt_type=CHECKPOINT_TYPE_BEST)
     if ckpt_path is None:
         raise FileNotFoundError(f"Could not find checkpoint for hash {model_hash}")
 
@@ -130,29 +142,68 @@ def estimate_masks(mix_transform, estimates_transform, masking_type="soft", alph
         raise ValueError('Invalid masking type. Choose either "soft" or "wiener".')
 
 
-def find_ckpt_from_hash(log_dir, hash_str, type="val"):
-    """Recursively search for a checkpoint file in the given directory that matches the specified hash.
-
-    The expected filename format is:
-    log_dir/<hash>/<hash>_datetime/checkpoints/last.ckpt
-    but we can have other variations like:
-    log_dir/<hash>/<hash>/checkpoints/last.ckpt
-    log_dir/<hash>_datetime/<hash>_datetime/checkpoints/last.ckpt
-    so we will match the hash in the first level of the directory structure. then
-    if we find multiple matches to last.ckpt, we will return the one with the latest modification time.
+def find_checkpoint(
+    search_dir: str,
+    version_id: str | None = None,
+    ckpt_type: str = CHECKPOINT_TYPE_BEST,
+    filename_contains: str | None = None,
+) -> str | None:
     """
-    from pathlib import Path
+    Recursively finds a checkpoint file in a directory structure.
 
-    log_dir = Path(log_dir)
-    hash_str = str(hash_str)
+    Args:
+        search_dir: The top-level directory to start the search from (e.g., "logs/").
+        version_id: An optional unique identifier (like a hash) for a specific run.
+        ckpt_type: The type of checkpoint to find ("last" or "best_epoch").
+        filename_contains: An optional string that must be present in the
+                           checkpoint's filename (e.g., "val" for validation checkpoints).
 
-    # Search for the hash in multiple recursive levels
-    matches = list(log_dir.rglob(f"{hash_str}*/checkpoints/*{type}*.ckpt"))
-    matches += list(log_dir.rglob(f"{hash_str}*/weights/*{type}*.pth"))
-    for path in matches:
-        if "latest" in str(path):
-            continue
-        if path.is_file():
-            return str(path)
+    Returns:
+        The path to the found checkpoint file as a string, or None if not found.
+    """
+    base_path = Path(search_dir)
+    if not base_path.is_dir():
+        return None
 
-    return None
+    # Define a flexible search pattern that can optionally filter by version_id
+    search_prefix = f"{version_id}*/" if version_id else "**/"
+
+    # Find all potential checkpoint files recursively
+    ckpt_files = list(base_path.rglob(search_prefix + "checkpoints/*.ckpt"))
+    pth_files = list(base_path.rglob(search_prefix + "weights/*.pth"))
+    all_matches = ckpt_files + pth_files
+
+    if filename_contains:
+        all_matches = [p for p in all_matches if filename_contains in p.name]
+    # -----------------------------------------------------------------
+
+    if not all_matches:
+        return None
+
+    if ckpt_type == CHECKPOINT_TYPE_LAST:
+        last_checkpoints = [p for p in all_matches if p.name == "last.ckpt"]
+        if not last_checkpoints:
+            return None
+        # Return the most recently modified one
+        return str(max(last_checkpoints, key=os.path.getmtime))
+
+    if ckpt_type == CHECKPOINT_TYPE_BEST:
+        epoch_checkpoints = [p for p in all_matches if p.name != "last.ckpt"]
+        if not epoch_checkpoints:
+            return None
+
+        def get_epoch_from_filename(path: Path) -> int:
+            match = re.search(r"epoch=(\d+)", path.name)
+            return int(match.group(1)) if match else -1
+
+        # Find the checkpoint with the highest epoch number
+        best_ckpt = max(epoch_checkpoints, key=get_epoch_from_filename)
+
+        if get_epoch_from_filename(best_ckpt) > -1:
+            return str(best_ckpt)
+        else:
+            return None
+
+    raise ValueError(f"Unknown ckpt_type: '{ckpt_type}'. Must be 'last' or 'best_epoch'.")
+
+
