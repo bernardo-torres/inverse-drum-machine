@@ -1,5 +1,3 @@
-from typing import Dict, Optional
-
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -13,7 +11,7 @@ class BaseEncoder(nn.Module):
     resulting feature frame rate.
     """
 
-    def __init__(self, transform: Optional[nn.Module] = None, sampling_rate: Optional[int] = None):
+    def __init__(self, transform: nn.Module | None = None, sampling_rate: int | None = None):
         """Initializes the BaseEncoder.
 
         Args:
@@ -28,7 +26,7 @@ class BaseEncoder(nn.Module):
         self.downsampling_factor = None
 
     @property
-    def frame_rate(self) -> Optional[float]:
+    def frame_rate(self) -> float | None:
         """Calculates and returns the frame rate of the encoder's output features.
 
         The frame rate is determined by the downsampling performed by the input
@@ -78,7 +76,7 @@ class BaseEncoder(nn.Module):
 
 
 class Encoder(BaseEncoder):
-    """A comprehensive encoder for audio processing.
+    """.
 
     This module processes a raw audio waveform through a series of stages:
     1.  **Transform**: Converts the waveform into a time-frequency representation.
@@ -95,10 +93,10 @@ class Encoder(BaseEncoder):
         self,
         backbone: nn.Module = nn.Identity(),
         pooling: nn.Module = nn.Identity(),
-        transcription_head: Optional[nn.Module] = None,
-        transform: Optional[nn.Module] = None,
-        sampling_rate: Optional[int] = None,
-        embedding_norm: Optional[nn.Module] = None,
+        transcription_head: nn.Module | None = None,
+        transform: nn.Module | None = None,
+        sampling_rate: int | None = None,
+        embedding_norm: nn.Module | None = None,
         embedding_one_hot: bool = False,
     ):
         """Initializes the Encoder.
@@ -123,7 +121,7 @@ class Encoder(BaseEncoder):
         self.embedding_norm = embedding_norm
         self.embedding_one_hot = embedding_one_hot
 
-    def forward(self, x: torch.Tensor) -> Dict[str, Optional[torch.Tensor]]:
+    def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor | None]:
         """Performs the full forward pass of the encoder.
 
         Args:
@@ -145,7 +143,7 @@ class Encoder(BaseEncoder):
         frame_features = self.backbone(input_features)
 
         # Synthesis conditioning
-        # 1.Pooling/mixture embedding
+        # Pooling/mixture embedding
         embeddings, attention_weights = None, None
         if not isinstance(self.pooling, nn.Identity):
             pooling_output = self.pooling(frame_features)
@@ -162,7 +160,7 @@ class Encoder(BaseEncoder):
             pred_class = embeddings.argmax(dim=1)
             embeddings = F.one_hot(pred_class, num_classes=embeddings.size(1)).to(embeddings.dtype)
 
-        # 2. Transcription
+        # Transcription
         activations = self.transcription_head(frame_features)
 
         return {
