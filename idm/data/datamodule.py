@@ -107,8 +107,9 @@ class DataModule(LightningDataModule):
         split_strategy: str | list[float] = "predefined",
         train_split: str = "train_train_kits",
         val_split: str = "val_train_kits",
-        val_dataset: Dataset | None = None,
-        test_dataset: Dataset | None = None,
+        test_split: str = "test_train_kits",
+        val_dataset: Dataset | None = None,  # Optional override for validation dataset
+        test_dataset: Dataset | None = None,  # Optional override for test dataset
         cache_partitions: list[str] = ["train", "val", "test"],
         # Audio processing
         sample_rate_target: int = 44100,
@@ -133,7 +134,7 @@ class DataModule(LightningDataModule):
         keep_in_memory: bool = False,
         cache_dir: str = "cache",
         # Miscellaneous/debugging
-        filter_audio_fn: str | list | dict | None = None,
+        # filter_audio_fn: str | list | dict | None = None,
         dataset_size_multiplier: int = 1,
         skip_audio_loading: bool = False,
         **dataloader_kwargs,
@@ -210,11 +211,22 @@ class DataModule(LightningDataModule):
             **ds_kwargs,
         )
 
+        self.test_dataset = get_dataset(
+            dataset_split=self.hparams.test_split,
+            dataset_root=self.hparams.dataset_root,
+            **ds_kwargs,
+        )
+
         # Verify no data leakage
         train_files = set(self.train_dataset.mix_metadata[:, 1])
         val_files = self.val_dataset.mix_metadata[:, 1]
+        test_files = self.test_dataset.mix_metadata[:, 1]
         if train_files.intersection(val_files):
             raise RuntimeError("Overlap detected between train and validation sets.")
+        if train_files.intersection(test_files):
+            raise RuntimeError("Overlap detected between train and test sets.")
+        if set(val_files).intersection(test_files):
+            raise RuntimeError("Overlap detected between validation and test sets.")
 
     def _setup_overfit_split(self) -> None:
         """Configures train and validation sets to use the same data for overfitting checks."""
@@ -232,6 +244,7 @@ class DataModule(LightningDataModule):
         )
         self.train_dataset.mix_metadata = self.train_dataset.mix_metadata[: self.hparams.batch_size]
         self.val_dataset = self.train_dataset
+        self.test_dataset = self.train_dataset
 
     def train_dataloader(self) -> DataLoader:
         if self.train_dataset is None:

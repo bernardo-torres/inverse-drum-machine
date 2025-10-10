@@ -4,9 +4,14 @@ import os
 import sys
 import warnings
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
-import h5py
+try:
+    import h5py
+
+    H5PY_AVAILABLE = True
+except ImportError:
+    H5PY_AVAILABLE = False
 import numpy as np
 import pandas as pd
 import torch
@@ -68,14 +73,14 @@ def with_audio_settings(dataset, **settings):
                 dataset._load_audio_kwargs[key] = value
 
 
-def _invert_map(mapping: Dict[Any, Any]) -> Dict[Any, Any]:
+def _invert_map(mapping: dict[Any, Any]) -> dict[Any, Any]:
     """Inverts a dictionary's key-value pairs."""
     return {v: k for k, v in mapping.items()}
 
 
 def _filter_dataframe_by_path(
     data: pd.DataFrame,
-    filter_patterns: Union[str, list, dict],
+    filter_patterns: str | list | dict,
     key: str = "Full Audio Path",
 ) -> pd.DataFrame:
     """
@@ -147,15 +152,15 @@ class MixOrMultitrackDataset(Dataset):
     def __init__(
         self,
         # Data source parameters
-        mix_metadata_file: Optional[str] = None,
-        multitrack_metadata_file: Optional[str] = None,
-        mix_metadata: Optional[pd.DataFrame] = None,
-        multitrack_metadata: Optional[pd.DataFrame] = None,
+        mix_metadata_file: str | None = None,
+        multitrack_metadata_file: str | None = None,
+        mix_metadata: pd.DataFrame | None = None,
+        multitrack_metadata: pd.DataFrame | None = None,
         dataset_root: str = "",
         annotation_root: str = "",
         # Audio processing parameters
         sample_rate_target: int = 44100,
-        duration: Optional[float] = None,
+        duration: float | None = None,
         mono: bool = True,
         normalize: bool = True,
         normalizing_function: str = "maxabs",
@@ -163,24 +168,24 @@ class MixOrMultitrackDataset(Dataset):
         backend: str = "torchaudio",
         # Class and annotation parameters
         version: str = "full",
-        label_map: Optional[Dict[str, str]] = None,
-        eval_classes: Optional[List[str]] = None,
+        label_map: dict[str, str] | None = None,
+        eval_classes: list[str] | None = None,
         # Dynamic mixing and source separation parameters
         return_stems: bool = True,
         dynamic_mixing: bool = False,
-        dynamic_mixing_classes: Optional[List[str]] = None,
-        get_gt_sources: Union[bool, str] = False,
+        dynamic_mixing_classes: list[str] | None = None,
+        get_gt_sources: bool | str = False,
         sample_duration: float = 1.0,
         # Caching parameters
         cache_hdf5: bool = False,
-        cache_path: Optional[str] = None,
+        cache_path: str | None = None,
         cache_dir: str = "cache",
         cache_multitrack: bool = False,
         optimize_silent_tracks: bool = False,
         keep_in_memory: bool = False,
         # Miscellaneous
-        name: Optional[str] = None,
-        filter_audio_fn: Optional[Union[str, list, dict]] = None,
+        name: str | None = None,
+        filter_audio_fn: str | list | dict | None = None,
         dataset_size_multiplier: int = 1,
         skip_audio_loading: bool = False,
         **load_audio_kwargs,
@@ -207,7 +212,7 @@ class MixOrMultitrackDataset(Dataset):
         self.sample_duration = sample_duration
         self.skip_audio_loading = skip_audio_loading
         self.eval_classes = eval_classes
-        self.gt_sources: Dict[Any, Dict[str, torch.Tensor]] = {}
+        self.gt_sources: dict[Any, dict[str, torch.Tensor]] = {}
 
         self._load_audio_kwargs = {
             "sample_rate_target": self.sample_rate_target,
@@ -295,7 +300,7 @@ class MixOrMultitrackDataset(Dataset):
         else:
             self.cached_annotations = [None] * len(self.mix_metadata)
 
-    def _create_column_index_map(self, columns: pd.Index) -> Dict[str, int]:
+    def _create_column_index_map(self, columns: pd.Index) -> dict[str, int]:
         """Creates a mapping from column name to its integer index."""
         col_map = {name: i for i, name in enumerate(columns)}
         if "stemgmd" in self.name.lower():
@@ -338,7 +343,7 @@ class MixOrMultitrackDataset(Dataset):
         """Returns the total number of items in the dataset."""
         return len(self.mix_metadata) * self.dataset_size_multiplier
 
-    def __getitem__(self, idx: int) -> Dict[str, Any]:
+    def __getitem__(self, idx: int) -> dict[str, Any]:
         """
         Retrieves a single data item from the dataset.
 
@@ -443,7 +448,7 @@ class MixOrMultitrackDataset(Dataset):
             log.warning(f"Could not get metadata for {audio_file}, returning 0 offset: {e}")
             return 0.0
 
-    def _get_mixture_audio(self, mixture_file: str, idx: int, **kwargs) -> Optional[torch.Tensor]:
+    def _get_mixture_audio(self, mixture_file: str, idx: int, **kwargs) -> torch.Tensor | None:
         """Loads mixture audio, using cache if available."""
         if self.skip_audio_loading:
             return None
@@ -463,6 +468,8 @@ class MixOrMultitrackDataset(Dataset):
             if self.cached_audio is not None:  # In-memory cache
                 audio = self.cached_audio[start_frame:end_frame].copy()
             else:  # On-disk HDF5 cache
+                if not H5PY_AVAILABLE:
+                    raise ImportError("h5py is required for HDF5 caching but is not installed.")
                 with h5py.File(self.cache_path, "r") as hf:
                     audio = hf["audio"][start_frame:end_frame]
 
@@ -481,7 +488,7 @@ class MixOrMultitrackDataset(Dataset):
 
         return self._load_audio(mixture_file, **kwargs)["audio"]
 
-    def _load_audio(self, audio_file: str, **kwargs) -> Dict[str, Any]:
+    def _load_audio(self, audio_file: str, **kwargs) -> dict[str, Any]:
         """Wrapper for the external load_audio utility."""
         final_kwargs = self._load_audio_kwargs.copy()
         final_kwargs.update(kwargs)
@@ -494,7 +501,7 @@ class MixOrMultitrackDataset(Dataset):
 
     def _load_annotations(
         self, annotation_file: str, offset_seconds: float
-    ) -> Dict[str, np.ndarray]:
+    ) -> dict[str, np.ndarray]:
         """Loads and processes annotation files."""
         # This function assumes external utilities `read_annotations_multilabel`
         # and `rename_key` exist and function as in the original code.
@@ -520,7 +527,7 @@ class MixOrMultitrackDataset(Dataset):
 
     def _get_item_multitrack(
         self, mixture_rel_path: str, offset_sec: float
-    ) -> Optional[Dict[str, torch.Tensor]]:
+    ) -> dict[str, torch.Tensor] | None:
         """Retrieves all relevant stems for a given mixture file."""
         if self.skip_audio_loading:
             return None
@@ -534,9 +541,9 @@ class MixOrMultitrackDataset(Dataset):
 
         return self._load_multitrack_stems(multitrack_idx, offset_sec)
 
-    def _load_multitrack_stems(self, idx: int, offset_sec: float) -> Dict[str, torch.Tensor]:
+    def _load_multitrack_stems(self, idx: int, offset_sec: float) -> dict[str, torch.Tensor]:
         """Loads, combines, and returns stems for a single multitrack recording."""
-        stems_audio: Dict[str, torch.Tensor] = {}
+        stems_audio: dict[str, torch.Tensor] = {}
         target_duration = int(self.duration * self.sample_rate_target) if self.duration else None
 
         for original_class, separation_class in self.merge_mapping.items():
@@ -592,7 +599,7 @@ class MixOrMultitrackDataset(Dataset):
             return torch.cat([audio, torch.zeros(pad_shape, dtype=audio.dtype)], dim=-1)
         return audio
 
-    def _create_empty_stems(self) -> Dict[str, torch.Tensor]:
+    def _create_empty_stems(self) -> dict[str, torch.Tensor]:
         """Creates a dictionary of silent stems."""
         if self.duration is not None and self.duration > 0:
             duration_samples = int(self.duration * self.sample_rate_target)
