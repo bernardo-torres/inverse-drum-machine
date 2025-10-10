@@ -10,7 +10,6 @@ optimizer:
   lr: 0.005
 
 loss:
-  # Note: MultiScaleLoss is not fully implemented in idm/losses.py
   _target_: idm.losses.MultiScaleLoss
   fft_sizes: [2048, 1024, 512, 256]
   hop_sizes: [512, 256, 128, 64]
