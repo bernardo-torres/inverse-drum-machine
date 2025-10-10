@@ -54,8 +54,8 @@ This project uses Poetry for dependency management. The following steps assume y
     ```bash
     poetry install # Install main dependencies
     poetry install --with dev # Install development dependencies (wandb, jupyter, etc.)
-    poetry install --with full # Install all optional dependencies (e.g. TorchNMF)
-    poetry install --with dev,full # Install all optional dependencies
+    poetry install --with nmf # Install nmf dependencies (e.g. TorchNMF)
+    poetry install --with dev,nmf # Install all optional dependencies
     ```
 
 ## Usage
