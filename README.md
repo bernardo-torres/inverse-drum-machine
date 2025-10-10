@@ -40,15 +40,22 @@ IDM is composed of three main modules:
 
 ## Installation
 
-This project uses Poetry for dependency management.
+This project uses Poetry for dependency management. The following steps assume you are working in a Python 3.10+ environment.
 
-1.  **Install Poetry:** If you don't have Poetry installed, follow the instructions on the [official website](https://python-poetry.org/docs/).
+1.  **Install Poetry:** If you don't have Poetry installed, follow the instructions on the [official website](https://python-poetry.org/docs/). One way is to run the following command inside your python environment:
 
-2.  **Clone the repository:**
+    ```bash
+    curl -sSL https://install.python-poetry.org | python3 -
+    ```
+
+2.  **Clone the repository**
 
 3.  **Install dependencies:**
     ```bash
-    poetry install
+    poetry install # Install main dependencies
+    poetry install --with dev # Install development dependencies (wandb, jupyter, etc.)
+    poetry install --with full # Install all optional dependencies (e.g. TorchNMF)
+    poetry install --with dev,full # Install all optional dependencies
     ```
 
 ## Usage
@@ -94,7 +101,6 @@ year={2025}
 
 ## TODO
 
-- [ ] Add poetry
 - [ ] Evaluation code
 - [ ] Model weights
 - [ ] Add baseline instructions
