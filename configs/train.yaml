@@ -17,6 +17,7 @@ sampling_rate: 44100
 n_drum_kits: 6
 feature_dim: 32 # Dimension of the feature extractor output
 sample_duration: 1.0 # in seconds
+version: "full"
 train_classes:
   - CY_CR
   - CY_RD
