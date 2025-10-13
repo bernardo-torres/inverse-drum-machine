@@ -105,6 +105,7 @@ year={2025}
 - [ ] Model weights
 - [ ] Add baseline instructions
 - [ ] Add StemGMD preprocessing instructions
+- [ ] Callbacks for logging audio samples during training
 
 <!-- - Baselines:
 

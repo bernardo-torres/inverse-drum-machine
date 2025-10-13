@@ -34,6 +34,7 @@ train: True
 test: True
 
 ckpt_path: null
+run_time: ${now:%Y-%m-%d}_${now:%H-%M-%S}
 
 # Trainer
 trainer:
