@@ -4,7 +4,7 @@ import logging
 import os
 import warnings
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 import librosa
 import librosa.display
@@ -206,9 +206,9 @@ class CustomFileLogger(Logger):
         self,
         save_dir: str,
         name: str = "default",
-        version: Optional[Union[int, str]] = "0.1",
-        metric_plot_kwargs: Optional[Dict] = None,
-        groups: Optional[list] = None,
+        version: int | str | None = "0.1",
+        metric_plot_kwargs: dict | None = None,
+        groups: list | None = None,
         image_format: str = "png",
         audio_format: str = "wav",
     ):
@@ -239,7 +239,7 @@ class CustomFileLogger(Logger):
         self._setup_experiment()
 
     @property
-    def save_dir(self) -> Optional[str]:
+    def save_dir(self) -> str | None:
         """Return the root directory where experiment logs get saved."""
         return self._save_dir
 
@@ -249,7 +249,7 @@ class CustomFileLogger(Logger):
         return self._name
 
     @property
-    def version(self) -> Union[int, str]:
+    def version(self) -> int | str:
         """Return the experiment version."""
         return self._version
 
@@ -269,7 +269,7 @@ class CustomFileLogger(Logger):
             dir_path.mkdir(parents=True, exist_ok=True)
 
     @rank_zero_only
-    def log_metrics(self, metrics: Dict[str, float], step: Optional[int] = None) -> None:
+    def log_metrics(self, metrics: dict[str, float], step: int | None = None) -> None:
         """Log metrics and create/update plots."""
         if step is None:
             step = 0
@@ -290,7 +290,7 @@ class CustomFileLogger(Logger):
             self._plot_metric(metric_name)
 
     @rank_zero_only
-    def log_hyperparams(self, params: Union[Dict[str, Any], argparse.Namespace]) -> None:
+    def log_hyperparams(self, params: dict[str, Any] | argparse.Namespace) -> None:
         """Log hyperparameters to a file."""
         if isinstance(params, argparse.Namespace):
             params = vars(params)
@@ -302,7 +302,7 @@ class CustomFileLogger(Logger):
 
     @rank_zero_only
     def log_image(
-        self, name: str, image: Union[Tensor, np.ndarray] = None, step: Optional[int] = None
+        self, name: str, image: Tensor | np.ndarray = None, step: int | None = None
     ) -> None:
         """Save image to file."""
         if step is not None:
@@ -324,10 +324,10 @@ class CustomFileLogger(Logger):
     @rank_zero_only
     def log_audio(
         self,
-        audio: Union[Tensor, np.ndarray],
+        audio: Tensor | np.ndarray,
         name: str,
         sample_rate: int,
-        step: Optional[int] = None,
+        step: int | None = None,
     ) -> None:
         """Save audio to file."""
         if isinstance(audio, Tensor):

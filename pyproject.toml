@@ -40,6 +40,8 @@ optional = true
 [tool.poetry.group.dev.dependencies]
 wandb = "^0.15.12"
 ipython = "^8.18.1"
+ruff = "^0.14.0"
+black = "^25.9.0"
 
 [tool.poetry.group.full.dependencies]
 torchnmf = "^0.3.5"

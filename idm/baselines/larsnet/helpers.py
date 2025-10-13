@@ -1,6 +1,5 @@
 import soxr
 import torch
-import torchaudio
 
 
 # def aggregate_larsnet_outputs(x, eval_classes):
