@@ -225,18 +225,12 @@ class InverseDrumMachine(BaseTrainer):
 
         total_loss = reconstruction_loss + transcription_loss + embedding_loss
 
-        self.log(f"{stage}/loss", total_loss, batch_size=batch_size)
-        self.log(f"{stage}/reconstruction_loss", reconstruction_loss, batch_size=batch_size)
-        self.log(
-            f"{stage}/transcription_loss", transcription_loss, prog_bar=True, batch_size=batch_size
-        )
-        self.log(f"{stage}/embedding_loss", embedding_loss, prog_bar=True, batch_size=batch_size)
-
         returns = {
             "loss": total_loss,
             "transcription_loss": transcription_loss,
             "reconstruction_loss": reconstruction_loss,
             "embedding_loss": embedding_loss,
+            "batch_size": batch_size,
         }
         if stage != "train":
             self.kit_preds.extend(embedding_logits.argmax(dim=-1).cpu().tolist())
@@ -250,10 +244,104 @@ class InverseDrumMachine(BaseTrainer):
         return returns
 
     def training_step(self, batch: dict, batch_idx: int) -> torch.Tensor:
-        return self._shared_step(batch, "train")["loss"]
+        returns = self._shared_step(batch, "train")
+        # Log step-level metrics (for progress monitoring)
 
-    def validation_step(self, batch: dict, batch_idx: int):
-        return self._shared_step(batch, "val")
+        recons_loss = returns["reconstruction_loss"]
+        trans_loss = returns["transcription_loss"]
+        emb_loss = returns["embedding_loss"]
+        total_loss = returns["loss"]
+        batch_size = returns["batch_size"]
+        self.log("train/loss", total_loss, batch_size=batch_size, on_step=True, on_epoch=False)
+
+        self.log(
+            "train/reconstruction_loss",
+            recons_loss,
+            batch_size=batch_size,
+            on_step=True,
+            on_epoch=False,
+        )
+        self.log(
+            "train/transcription_loss",
+            trans_loss,
+            batch_size=batch_size,
+            on_step=True,
+            on_epoch=False,
+        )
+        self.log(
+            "train/embedding_loss",
+            emb_loss,
+            batch_size=batch_size,
+            on_step=True,
+            on_epoch=False,
+        )
+
+        # Log epoch-level metrics (for CustomFileLogger)
+        self.log(
+            "train/loss_epoch",
+            total_loss,
+            batch_size=batch_size,
+            on_step=False,
+            on_epoch=True,
+        )
+        self.log(
+            "train/reconstruction_loss_epoch",
+            recons_loss,
+            batch_size=batch_size,
+            on_step=False,
+            on_epoch=True,
+        )
+        self.log(
+            "train/transcription_loss_epoch",
+            trans_loss,
+            batch_size=batch_size,
+            on_step=False,
+            on_epoch=True,
+        )
+        self.log(
+            "train/embedding_loss_epoch",
+            emb_loss,
+            batch_size=batch_size,
+            on_step=False,
+            on_epoch=True,
+        )
+
+    def validation_step(self, batch: dict, batch_idx: int, stage: str = "val"):
+        returns = self._shared_step(batch, stage)
+        recons_loss = returns["reconstruction_loss"]
+        trans_loss = returns["transcription_loss"]
+        emb_loss = returns["embedding_loss"]
+        total_loss = returns["loss"]
+        batch_size = returns["batch_size"]
+        self.log(
+            f"{stage}/loss",
+            total_loss,
+            batch_size=batch_size,
+            on_step=False,
+            on_epoch=True,
+        )
+        self.log(
+            f"{stage}/reconstruction_loss",
+            recons_loss,
+            batch_size=batch_size,
+            on_step=False,
+            on_epoch=True,
+        )
+        self.log(
+            f"{stage}/transcription_loss",
+            trans_loss,
+            batch_size=batch_size,
+            on_step=False,
+            on_epoch=True,
+        )
+        self.log(
+            f"{stage}/embedding_loss",
+            emb_loss,
+            batch_size=batch_size,
+            on_step=False,
+            on_epoch=True,
+        )
+        return returns
 
     def on_validation_epoch_end(self):
         """Calculates and logs metrics at the end of the validation epoch."""
@@ -265,7 +353,7 @@ class InverseDrumMachine(BaseTrainer):
 
     def test_step(self, batch: dict, batch_idx: int):
         """The test step for the model."""
-        self._shared_step(batch, "test")
+        return self.validation_step(batch, batch_idx, stage="test")
 
     def on_test_epoch_end(self):
         """Calculates and logs metrics at the end of the test epoch."""

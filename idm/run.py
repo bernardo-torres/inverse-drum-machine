@@ -137,17 +137,36 @@ class TrainingPipeline:
         }
         log_hyperparameters(object_dict)
 
+    def setup_log_dir(self) -> None:
+        """Sets up the logging directory."""
+        out_dir = Path(self.cfg.paths.output_dir)
+        if not self.do_resume:
+            # Save the fully resolved config for reproducibility
+            resolved_config_path = out_dir / ".hydra" / "config_resolved.yaml"
+            resolved_config_path.parent.mkdir(parents=True, exist_ok=True)
+            resolved_config = OmegaConf.to_container(self.cfg, resolve=True)
+            with open(resolved_config_path, "w") as f:
+                yaml.dump(resolved_config, f)
+
+        by_time_dir = out_dir.parent.parent / "by_time"
+        by_time_dir.mkdir(exist_ok=True)
+
+        symlink_path = by_time_dir / f"{self.cfg.run_time}-{self.cfg.paths.hash}"
+        if not symlink_path.exists():
+            symlink_path.symlink_to(out_dir.resolve())
+
     def run_training(self) -> None:
         """Executes the training phase."""
-        if not self.cfg.get("train"):
-            return
 
         log.info("Starting training!")
-        ckpt_path = find_checkpoint(self.cfg.paths.output_dir, ckpt_type=CHECKPOINT_TYPE_LAST)
-        if ckpt_path:
-            log.info(f"Resuming training from checkpoint: {ckpt_path}")
+        if not self.do_resume:
+            self.ckpt_path = find_checkpoint(
+                self.cfg.paths.output_dir, ckpt_type=CHECKPOINT_TYPE_LAST
+            )
+            if self.ckpt_path:
+                log.info(f"Resuming training from checkpoint: {self.ckpt_path}")
 
-        self.trainer.fit(model=self.model, datamodule=self.datamodule, ckpt_path=ckpt_path)
+        self.trainer.fit(model=self.model, datamodule=self.datamodule, ckpt_path=self.ckpt_path)
 
     def run_testing(self) -> None:
         """Executes the testing phase."""
@@ -184,6 +203,23 @@ class TrainingPipeline:
         if self.cfg.get("seed"):
             L.seed_everything(self.cfg.seed, workers=True)
 
+        self.do_train = self.cfg.get("train", False)
+        self.do_resume = False
+        self.do_test = self.cfg.get("test", False) or (not self.do_train)
+
+        if self.cfg.ckpt_path:
+            # Resume from hash
+            resume_log_dir = Path(self.cfg.paths.output_dir).parent / self.cfg.ckpt_path
+            self.ckpt_path = find_checkpoint(resume_log_dir, ckpt_type=CHECKPOINT_TYPE_LAST)
+            if not self.ckpt_path:
+                raise FileNotFoundError(f"No checkpoint found in {resume_log_dir}!")
+            log.info(
+                f"Resuming training from provided checkpoint: {self.cfg.ckpt_path} at {self.ckpt_path}"
+            )
+            self.do_resume = True
+            # Let's replace our config with the one from the checkpoint for consistency
+            self.cfg = OmegaConf.load(resume_log_dir / ".hydra" / "config_resolved.yaml")
+
         self._instantiate_objects()
         self._log_hyperparameters()
         self._run_tuner()
@@ -192,15 +228,11 @@ class TrainingPipeline:
             # Re-log hyperparameters if they were changed by the tuner
             self._log_hyperparameters()
 
-        # Save the fully resolved config for reproducibility
-        resolved_config_path = Path(self.cfg.paths.output_dir) / ".hydra" / "config_resolved.yaml"
-        resolved_config_path.parent.mkdir(parents=True, exist_ok=True)
-        resolved_config = OmegaConf.to_container(self.cfg, resolve=True)
-        with open(resolved_config_path, "w") as f:
-            yaml.dump(resolved_config, f)
-
-        self.run_training()
-        self.run_testing()
+        self.setup_log_dir()
+        if self.do_train:
+            self.run_training()
+        if self.do_test:
+            self.run_testing()
 
         # Gather final metrics
         metric_dict = self.trainer.callback_metrics
@@ -250,6 +282,7 @@ def main(cfg: DictConfig) -> float | None:
     Returns:
         The value of the optimized metric, if specified.
     """
+    log.info("------------------------------------------------")
     if cfg.get("extras") and cfg.extras.get("print_config"):
         log.info("Printing config tree with Rich! <cfg.extras.print_config=True>")
         print_config_tree(cfg, resolve=True, save_to_file=True)
