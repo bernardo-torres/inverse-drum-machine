@@ -43,7 +43,7 @@ ipython = "^8.18.1"
 ruff = "^0.14.0"
 black = "^25.9.0"
 
-[tool.poetry.group.full.dependencies]
+[tool.poetry.group.nmf.dependencies]
 torchnmf = "^0.3.5"
 
 [tool.black]
