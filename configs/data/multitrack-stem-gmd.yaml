@@ -1,0 +1,34 @@
+# @package _group_
+
+_target_: idm.data.datamodule.DataModule
+name: "stemgmd"
+dataset_root: "${paths.data_dir}/StemGMD"
+annotation_root: "${paths.data_dir}/StemGMD/annotations"
+multitrack_metadata_file: "${data.dataset_root}/stemgmd_separation_mapping.csv"
+mix_metadata_file: "${data.dataset_root}/stemgmd_mapping.csv"
+get_gt_sources: "data_drum_sources/Stem_GMD_single_hits"
+
+normalizing_function: "maxabs"
+sample_rate_target: ${sampling_rate}
+mono: True
+duration: 6.0
+batch_size: 33
+random_crop: True
+
+split_strategy: "predefined"
+train_split: "train_train_kits"
+val_split: "val_train_kits"
+test_split: "test_train_kits"
+
+version: ${version}
+
+backend: "soundfile"
+num_workers: 10
+num_workers_val: 4
+batch_size_val: 1
+pin_memory: True
+return_stems: False
+
+cache_hdf5: False
+cache_dir: "cache"
+keep_in_memory: False
