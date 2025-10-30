@@ -40,7 +40,7 @@ IDM is composed of three main modules:
 
 ## Installation
 
-This project uses Poetry for dependency management. The following steps assume you are working in a Python 3.10+ environment.
+This project uses Poetry for dependency management. The following steps assume you are working in a Python 3.10+ environment (you can create one as such `conda create --name idm python=3.10`).
 
 1.  **Install Poetry:** If you don't have Poetry installed, follow the instructions on the [official website](https://python-poetry.org/docs/). One way is to run the following command inside your python environment:
 
@@ -91,7 +91,7 @@ For detailed results, audio examples, and comparisons with baseline models, plea
 If you find this work useful in your research, please consider citing the following paper:
 
 ```
-@article{torres2024inversedrummachine,
+@article{torres2025inversedrummachine,
 title={The Inverse Drum Machine: Source Separation Through Joint Transcription and Analysis-by-Synthesis},
 author={Torres, Bernardo and Peeters, Geoffroy and Richard, Ga{\"e}l},
 journal={arXiv preprint arXiv:2505.03337},
