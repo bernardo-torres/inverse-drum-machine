@@ -94,8 +94,9 @@ If you find this work useful in your research, please consider citing the follow
 @article{torres2025inversedrummachine,
 title={The Inverse Drum Machine: Source Separation Through Joint Transcription and Analysis-by-Synthesis},
 author={Torres, Bernardo and Peeters, Geoffroy and Richard, Ga{\"e}l},
-journal={arXiv preprint arXiv:2505.03337},
-year={2025}
+journal={IEEE Transactions on Audio, Speech and Language Processing},
+year={2025},
+doi={10.1109/TASLPRO.2025.3629286}
 }
 ```
 
