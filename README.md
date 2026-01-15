@@ -105,10 +105,11 @@ doi={10.1109/TASLPRO.2025.3629286}
 ## TODO
 
 - [ ] Evaluation code
-- [ ] Model weights
+- [x] Model weights
 - [ ] Add baseline instructions
 - [ ] Add StemGMD preprocessing instructions
 - [ ] Callbacks for logging audio samples during training
+- [ ] Train new transcription module
 
 <!-- - Baselines:
 
