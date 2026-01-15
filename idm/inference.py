@@ -23,7 +23,7 @@ except:
     NORBERT = None
 
 
-def load_model(identifier, device, log_dir="logs"):
+def load_model(identifier, device, log_dir="pretrained"):
     """Loads a model based on an identifier string.
     Args:
         identifier: Can be a model hash, 'oracle', 'gt', 'larsnet_mono', 'larsnet_stereo', or 'nmfd_<case>'.

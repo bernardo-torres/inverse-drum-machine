@@ -17,7 +17,7 @@ IDM does Drum Source Separation (DSS) using analysis-by-synthesis combined with 
 
 <!-- add a small note in italic here-->
 
-\*_Pre-trained model weights and evaluation code will be added very soon, for now only the training and inference code is available._
+\*_Evaluation code will be added very soon, for now only the training and inference code is available, as well as weights for the model described in the paper._
 
 ### System Architecture
 
@@ -70,13 +70,15 @@ from idm.inference import load_model, separate
 
 # Load the pre-trained model
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model, name = load_model('idm-44-train-kits', device)
+model, name = load_model('idm-44-train-kits', device, log_dir="pretrained")
 
 # Separate the drum stems from an audio file
 drum_loop_44_1khz = "path/to/your/drum_loop.wav"
 output_dir = "output/separated"
 separate(drum_loop_44_1khz, model, output_dir=output_dir)
 ```
+
+Note: if the drum loop is too far from the training distribution, the separation quality will be bad. This could be due to the transcription module not detecting the onsets correctly. We encourage users to try manual overrides of the transcription at inference time for better results. If I have some time, I will try to improve the transcription module.
 
 ## Training
 
