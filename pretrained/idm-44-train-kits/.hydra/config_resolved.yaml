@@ -1,0 +1,310 @@
+ckpt_path: null
+data:
+  _target_: idm.data.datamodule.DataModule
+  annotation_root: data_evals/StemGMD/annotations
+  backend: soundfile
+  batch_size: 7
+  batch_size_val: 1
+  cache_dir: cache
+  cache_hdf5: false
+  dataset_root: data_evals/StemGMD
+  dataset_size_multiplier: 1
+  duration: 6
+  dynamic_mixing: false
+  dynamic_mixing_classes:
+    - CY_CR
+    - CY_RD
+    - HH_CHH
+    - HH_OHH
+    - KD
+    - SD
+    - TT_HFT
+    - TT_HMT
+    - TT_LMT
+  filter_audio_fn:
+    /bluebird/: remove
+    /detroit_garage/: remove
+    /eval_session/: remove
+    /motown_revisited/: remove
+    /roots/: remove
+  get_gt_sources: data_drum_sources/Stem_GMD_single_hits
+  keep_in_memory: false
+  mix_metadata_file: data_evals/StemGMD/stemgmd_mapping.csv
+  mono: true
+  multitrack_metadata_file: data_evals/StemGMD/stemgmd_separation_mapping.csv
+  n_train_kits: 6
+  name: stemgmd
+  normalizing_function: maxabs
+  num_workers: 10
+  num_workers_val: 4
+  pin_memory: true
+  random_crop: true
+  return_stems: false
+  sample_duration: 1.0
+  sample_rate_target: 44100
+  split: predefined
+  test_dataset:
+    _target_: idm.data.datasets.MixOrMultitrackDataset
+    annotation_root: data_evals/StemGMD/annotations
+    cache_dir: cache
+    cache_hdf5: false
+    dataset_root: data_evals/StemGMD
+    duration: -1
+    dynamic_mixing: false
+    dynamic_mixing_classes:
+      - CY_CR
+      - CY_RD
+      - HH_CHH
+      - HH_OHH
+      - KD
+      - SD
+      - TT_HFT
+      - TT_HMT
+      - TT_LMT
+    filter_audio_fn:
+      /bluebird/: remove
+      /brooklyn/: null
+      /detroit_garage/: remove
+      /east_bay/: null
+      /eval_session/: keep
+      /heavy/: null
+      /motown_revisited/: remove
+      /portland/: null
+      /retro_rock/: null
+      /roots/: remove
+      /socal/: null
+    get_gt_sources: data_drum_sources/Stem_GMD_single_hits
+    keep_in_memory: false
+    mix_metadata: null
+    mix_metadata_file: data_evals/StemGMD/stemgmd_mapping.csv
+    mono: true
+    multitrack_metadata: null
+    multitrack_metadata_file: data_evals/StemGMD/stemgmd_separation_mapping.csv
+    n_drum_kits: 6
+    name: stemgmd_test_train_kits
+    normalizing_function: maxabs
+    random_crop: false
+    sample_rate_target: 44100
+    skip_audio_loading: false
+    version: full
+  version: full
+data_path: data_drum_sources
+dora:
+  dir: logs/train/dora_xps
+  exclude:
+    - checkpoint.*
+    - slurm.*
+    - slurm*
+    - callbacks*
+    - logger*
+    - notes*
+    - hparams_search*
+    - location*
+    - experiment_group*
+    - experiment_name*
+    - experiment_folder*
+    - project*
+    - data.num_workers*
+    - data.num_workers_val*
+    - output_dir*
+    - paths*
+    - model.output_dir*
+    - trainer.default_root_dir*
+    - data.cache_dir*
+    - data.test_dataset.cache_dir
+  git_save: false
+drumstem_path: data_drumstems
+duration: 6
+evaldata_path: data_evals
+evalseparation_path: data_separation
+experiment_folder: TR_SY_KC
+experiment_group: ""
+experiment_name: TR_SY_KC
+experiment_ref: TR_SY_KC
+extras:
+  enforce_tags: true
+  ignore_warnings: false
+  print_config: true
+location: cluster
+logger:
+  custom:
+    _target_: idm.logger.CustomFileLogger
+    name: test
+    save_dir: logs/train/dora_xps/xps/9cf252ba
+model:
+  _target_: idm.idm.InverseDrumMachine
+  augmentations:
+    _target_: idm.components.BatchRandomGain
+    max_gain: 1.0
+    min_gain: 0.3
+    p: 0.8
+  decoder:
+    _target_: idm.decoder.decoder.Decoder
+    peak_picking:
+      _target_: idm.components.IdentityWithKwargs
+    processors:
+      _target_: idm.decoder.synth.MultiTrackTimeVaryingGain
+      downsampling_factor: -1
+      hidden_size: 8
+      interpolate: false
+      latent_size: 32
+      n_tracks: 9
+    sample_duration: 1.0
+    sample_synth:
+      _target_: idm.decoder.one_shot_synth.TransientTCNWithEnvelope
+      dilation_base: 2
+      dilation_blocks: 12
+      envelope_mode: exponential
+      film_batch_norm: false
+      film_conditioning: true
+      film_embedding_size: 15
+      hidden_channels: 48
+      in_channels: 1
+      interpolation_method: window
+      kernel_size: 15
+      n_tracks: 9
+      norm: instance
+      normalize_output: true
+      num_envelope_points: 10
+      num_layers: 12
+      out_channels: 1
+      sample_rate: 44100
+    sampling_rate: 44100
+    sequencer:
+      _target_: idm.decoder.sequencer.FastDrumSequencerWithMixer
+      # n_notes: 9
+      upsampler:
+        # _target_: idm.models.components.drummer_net_modules.ZeroInserter
+        _target_: idm.decoder.sequencer.ZeroInserter
+        insertion_rate: 256
+  embedding_loss:
+    _target_: torch.nn.CrossEntropyLoss
+  embedding_size: 15
+  encoder:
+    _target_: idm.feature_extractor.encoder.Encoder
+    backbone:
+      _target_: idm.feature_extractor.convnext.ConvNeXt
+      dims:
+        - 4
+        - 8
+        - 16
+        - 32
+      downsample: false
+      drop_path_rate: 0
+      input_channels: 1
+      kernel_size: 7
+    embedding_norm:
+      _target_: torch.nn.Softmax
+      dim: -1
+    pooling:
+      # _target_: idm.models.embedding.kit_classifier.DrumKitClassifier
+      _target_: idm.synthesis_conditioning.embedding.DrumKitClassifier
+      in_features: 32
+      n_drum_kits: 6
+    sampling_rate: 44100
+    transcription_head:
+      # _target_: idm.models.encoder.transcription_head.TranscriptionHead
+      _target_: idm.synthesis_conditioning.transcription.TranscriptionHead
+      activation: relu
+      input_dim: 32
+      kernel_size: 7
+      n_classes: 9
+      onset_activation: none
+      sequence_model:
+        _target_: torch.nn.Identity
+      velocity_activation: exp_sigmoid
+    transform:
+      # _target_: idm.feature_extractor.stft.mel.MelSpectrogram
+      _target_: idm.feature_extractor.mel.MelSpectrogram
+      hop_length: 256
+      log: true
+      n_fft: 1024
+      n_mels: 128
+      sample_rate: 44100
+  # feature_size: 32
+  # filter_present_sources: false
+  gt_sequencing: true
+  loss:
+    _target_: idm.losses.MultiScaleLoss
+    fft_sizes:
+      - 2048
+      - 1024
+      - 512
+      - 256
+    hop_sizes:
+      - 512
+      - 256
+      - 128
+      - 64
+    w_lin_mag: 1.0
+    w_log_mag: 1.0
+    win_lengths:
+      - 2048
+      - 1024
+      - 512
+      - 256
+  # metrics:
+  #   - _target_: idm.metrics.LogSpectralDistance
+  #     filter_energy_threshold: 0.001
+  #     hop_length: 512
+  #     n_fft: 2048
+  #   - _target_: idm.metrics.SilenceEvaluation
+  #     hop_length: 512
+  #     silent_threshold: 0.001
+  n_drum_kits: 6
+  optimizer:
+    _partial_: true
+    _target_: torch.optim.Adam
+    lr: 0.005
+  output_dir: logs/train/dora_xps/xps/9cf252ba
+  sampling_rate: 44100
+  smooth_targets: false
+  train_classes:
+    - CY_CR
+    - CY_RD
+    - HH_CHH
+    - HH_OHH
+    - KD
+    - SD
+    - TT_HFT
+    - TT_HMT
+    - TT_LMT
+  transcription_loss:
+    _target_: torch.nn.BCEWithLogitsLoss
+  use_target_embeddings: false
+  version: full
+n_train_classes: 9
+notes: transcription, synthesis, and drum kit classifier
+project: drums_demixing-transcription-synthesis
+sample_duration: 1.0
+sampling_rate: 44100
+seed: 1964
+select_kit_train: null
+select_kit_val: 0
+
+task_name: train
+test: true
+train: true
+train_classes:
+  - CY_CR
+  - CY_RD
+  - HH_CHH
+  - HH_OHH
+  - KD
+  - SD
+  - TT_HFT
+  - TT_HMT
+  - TT_LMT
+trainer:
+  _target_: lightning.pytorch.trainer.Trainer
+  accelerator: gpu
+  check_val_every_n_epoch: 1
+  default_root_dir: logs/train/dora_xps/xps/9cf252ba
+  deterministic: false
+  devices: 1
+  enable_progress_bar: true
+  gradient_clip_val: 1
+  limit_val_batches: 250
+  max_epochs: 6000
+  max_steps: 400000
+  min_epochs: 50

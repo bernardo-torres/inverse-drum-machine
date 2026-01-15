@@ -1,0 +1,127 @@
+_target_: idm.idm.InverseDrumMachine
+augmentations:
+  _target_: idm.components.BatchRandomGain
+  max_gain: 1.0
+  min_gain: 0.3
+  p: 0.8
+decoder:
+  _target_: idm.decoder.decoder.Decoder
+  peak_picking:
+    _target_: idm.components.IdentityWithKwargs
+  processors:
+    _target_: idm.decoder.synth.MultiTrackTimeVaryingGain
+    downsampling_factor: -1
+    hidden_size: 8
+    interpolate: false
+    latent_size: 32
+    n_tracks: 9
+  sample_duration: 1.0
+  sample_synth:
+    _target_: idm.decoder.one_shot_synth.TransientTCNWithEnvelope
+    dilation_base: 2
+    dilation_blocks: 12
+    envelope_mode: exponential
+    film_batch_norm: false
+    film_conditioning: true
+    film_embedding_size: 15
+    hidden_channels: 48
+    in_channels: 1
+    interpolation_method: window
+    kernel_size: 15
+    n_tracks: 9
+    norm: instance
+    normalize_output: true
+    num_envelope_points: 10
+    num_layers: 12
+    out_channels: 1
+    sample_rate: 44100
+  sampling_rate: 44100
+  sequencer:
+    _target_: idm.decoder.sequencer.FastDrumSequencerWithMixer
+    # n_notes: 9
+    upsampler:
+      _target_: idm.decoder.sequencer.ZeroInserter
+      insertion_rate: 256
+embedding_loss:
+  _target_: torch.nn.CrossEntropyLoss
+embedding_size: 15
+encoder:
+  _target_: idm.feature_extractor.encoder.Encoder
+  backbone:
+    _target_: idm.feature_extractor.convnext.ConvNeXt
+    dims:
+      - 4
+      - 8
+      - 16
+      - 32
+    downsample: false
+    drop_path_rate: 0
+    input_channels: 1
+    kernel_size: 7
+  embedding_norm:
+    _target_: torch.nn.Softmax
+    dim: -1
+  pooling:
+    _target_: idm.synthesis_conditioning.embedding.DrumKitClassifier
+    in_features: 32
+    n_drum_kits: 6
+  sampling_rate: 44100
+  transcription_head:
+    _target_: idm.synthesis_conditioning.transcription.TranscriptionHead
+    activation: relu
+    input_dim: 32
+    kernel_size: 7
+    n_classes: 9
+    onset_activation: none
+    sequence_model:
+      _target_: torch.nn.Identity
+    velocity_activation: exp_sigmoid
+  transform:
+    _target_: idm.feature_extractor.mel.MelSpectrogram
+    hop_length: 256
+    log: true
+    n_fft: 1024
+    n_mels: 128
+    sample_rate: 44100
+gt_sequencing: true
+loss:
+  _target_: idm.losses.MultiScaleLoss
+  fft_sizes:
+    - 2048
+    - 1024
+    - 512
+    - 256
+  hop_sizes:
+    - 512
+    - 256
+    - 128
+    - 64
+  w_lin_mag: 1.0
+  w_log_mag: 1.0
+  win_lengths:
+    - 2048
+    - 1024
+    - 512
+    - 256
+n_drum_kits: 6
+optimizer:
+  _partial_: true
+  _target_: torch.optim.Adam
+  lr: 0.005
+output_dir: logs/output
+sampling_rate: 44100
+smooth_targets: false
+train_classes:
+  - CY_CR
+  - CY_RD
+  - HH_CHH
+  - HH_OHH
+  - KD
+  - SD
+  - TT_HFT
+  - TT_HMT
+  - TT_LMT
+transcription_loss:
+  _target_: torch.nn.BCEWithLogitsLoss
+use_target_embeddings: false
+version: full

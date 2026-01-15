@@ -23,12 +23,17 @@ except:
     NORBERT = None
 
 
-def load_model(identifier, device):
-    # Get root from rootutils
-    """Loads a model based on an identifier string."""
+def load_model(identifier, device, log_dir="logs"):
+    """Loads a model based on an identifier string.
+    Args:
+        identifier: Can be a model hash, 'oracle', 'gt', 'larsnet_mono', 'larsnet_stereo', or 'nmfd_<case>'.
+        device: Device to load the model onto.
+        log_dir: Directory where model logs and checkpoints are stored (relative to ROOT_PATH).
+    """
     print(f"Loading model: {identifier}")
     if "oracle" in identifier or "gt" in identifier:
         return identifier, identifier  # Just return the string as a placeholder
+    model_only = False
     if "larsnet" in identifier:
         from idm.baselines.larsnet.larsnet import LarsNet
 
@@ -62,7 +67,7 @@ def load_model(identifier, device):
 
     else:  # Assume it's a hash for a trained model
         # log_dir = Path("logs/train/dora_xps/grids/")
-        log_dir = ROOT_PATH / "logs"
+        log_dir = ROOT_PATH / log_dir
         # ckpt_path = find_ckpt_from_hash(log_dir, identifier, type="val")
         ckpt_path = find_checkpoint(
             log_dir, version_id=identifier, ckpt_type=CHECKPOINT_TYPE_BEST, filename_contains="val"
@@ -72,8 +77,16 @@ def load_model(identifier, device):
             raise FileNotFoundError(f"Could not find checkpoint for hash {identifier} in {log_dir}")
         print(f"Found checkpoint at: {os.path.relpath(ckpt_path, ROOT_PATH)}")
         exp_dir = Path(ckpt_path).parent.parent
-        config_path = exp_dir / ".hydra" / "config_resolved.yaml"
-    model_cfg = OmegaConf.load(config_path).model
+        config_path = exp_dir / "checkpoints" / "model.yaml"
+        if config_path.exists():
+            model_only = True
+        else:  # fallback to resolved config
+            config_path = exp_dir / ".hydra" / "config_resolved.yaml"
+            print(
+                f"Warning: config.yaml not found in {exp_dir / 'checkpoints'}. Using config_resolved.yaml instead."
+            )
+            model_only = False
+    model_cfg = OmegaConf.load(config_path) if model_only else OmegaConf.load(config_path).model
     model = hydra.utils.instantiate(model_cfg)
     if ckpt_path:
         ckpt = torch.load(ckpt_path, map_location="cpu")
@@ -91,10 +104,19 @@ def load_model_from_hash(model_hash: str, logs_dir: str = "logs/train/dora_xps/g
         raise FileNotFoundError(f"Could not find checkpoint for hash {model_hash}")
 
     exp_dir = Path(ckpt_path).parent.parent
-    config_path = exp_dir / ".hydra" / "config_resolved.yaml"
+    config_path = exp_dir / "checkpoints" / "model.yaml"
+    if config_path.exists():
+        model_only = True
+    else:  # fallback to resolved config
+        config_path = exp_dir / ".hydra" / "config_resolved.yaml"
+        print(
+            f"Warning: config.yaml not found in {exp_dir / 'checkpoints'}. Using config_resolved.yaml instead."
+        )
+        model_only = False
+
     cfg = OmegaConf.load(config_path)
 
-    model = hydra.utils.instantiate(cfg.model)
+    model = hydra.utils.instantiate(cfg if model_only else cfg.model)
     ckpt = torch.load(ckpt_path, map_location="cpu")
     model.load_state_dict(ckpt.get("state_dict", ckpt))
     model.eval()
@@ -175,7 +197,6 @@ def find_checkpoint(
 
     if filename_contains:
         all_matches = [p for p in all_matches if filename_contains in p.name]
-    # -----------------------------------------------------------------
 
     if not all_matches:
         return None
