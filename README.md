@@ -72,13 +72,26 @@ from idm.inference import load_model, separate
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model, name = load_model('idm-44-train-kits', device, log_dir="pretrained")
 
-# Separate the drum stems from an audio file
 drum_loop_44_1khz = "path/to/your/drum_loop.wav"
 output_dir = "output/separated"
-separate(drum_loop_44_1khz, model, output_dir=output_dir)
+# Separate the audio using Wiener filtering
+stems = separate(drum_loop_44_1khz, model, output_dir=output_dir, masking='wiener', alpha=1.0)
 ```
 
 Note: if the drum loop is too far from the training distribution, the separation quality will be bad. This could be due to the transcription module not detecting the onsets correctly. We encourage users to try manual overrides of the transcription at inference time for better results. If I have some time, I will try to improve the transcription module.
+
+To override the transcription, you can pass a dictionary with the onsets to the `separate` function:
+
+```python
+# Example of manual transcription override
+print(model.train_classes) # manual transcription should match these classes
+onsets = {
+    'KD': [0.0, 0.5, 1.0],
+    'SD': [0.25, 0.75],
+    'HH_CHH': [0.125, 0.375, 0.625, 0.875]
+}
+stems = separate(drum_loop_44_1khz, model, save_to_disk=False, masking='wiener', alpha=1.0, onsets=onsets)
+```
 
 ## Training
 
@@ -93,6 +106,7 @@ For detailed results, audio examples, and comparisons with baseline models, plea
 If you find this work useful in your research, please consider citing the following paper:
 
 ```
+
 @article{torres2025inversedrummachine,
 title={The Inverse Drum Machine: Source Separation Through Joint Transcription and Analysis-by-Synthesis},
 author={Torres, Bernardo and Peeters, Geoffroy and Richard, Ga{\"e}l},
@@ -100,6 +114,7 @@ journal={IEEE Transactions on Audio, Speech and Language Processing},
 year={2025},
 doi={10.1109/TASLPRO.2025.3629286}
 }
+
 ```
 
 ## TODO
@@ -115,3 +130,7 @@ doi={10.1109/TASLPRO.2025.3629286}
 
 Larsnet: put pretrained models in folder larsnet/pretrained_models. exampel path project_root/larsnet/pretrained_models/hihat/pretrained_hihat_unet.pth
 or change the path in configs/baselines/larsnet/config.yaml (under inference_models) -->
+
+```
+
+```

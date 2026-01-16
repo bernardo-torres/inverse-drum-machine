@@ -12,6 +12,7 @@ from omegaconf import OmegaConf
 
 from idm import CHECKPOINT_TYPE_BEST, CHECKPOINT_TYPE_LAST
 from idm.feature_extractor.stft import STFT
+from idm.idm import convert_onset_dict_to_activations
 
 rootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 ROOT_PATH = Path(rootutils.find_root())
@@ -229,14 +230,22 @@ def find_checkpoint(
 
 
 def separate(
-    audio_path: str,
+    path_or_tensor: str | torch.Tensor,
     model: nn.Module,
     output_dir: str = "output/separated",
     masking: str | None = "wiener",
     alpha: float = 1.0,
+    save_to_disk: bool = True,
+    onsets=None,
 ):
-    """Separates a given audio file into its constituent drum stems."""
-    audio, sr = sf.read(audio_path, always_2d=True)
+    """Separates a given audio file/tensor into its constituent drum stems."""
+    if isinstance(path_or_tensor, torch.Tensor):
+        audio = path_or_tensor
+        if audio.dim() == 1:
+            audio = audio.unsqueeze(0)
+        sr = getattr(model, "sampling_rate", 44100)
+    else:
+        audio, sr = sf.read(path_or_tensor, always_2d=True)
     audio = torch.from_numpy(audio.T).float()
 
     model_sr = getattr(model, "sampling_rate", 44100)
@@ -246,6 +255,7 @@ def separate(
     device = next(model.parameters()).device
     audio = audio.to(device)
     input_mix = audio
+    override_onsets = None
 
     is_mono_model = getattr(model, "mono", False)
     if is_mono_model and input_mix.shape[0] > 1:
@@ -255,10 +265,22 @@ def separate(
 
     with torch.no_grad():
         if hasattr(model, "encoder"):
-            encoder_outs = model.encoder(input_mix.unsqueeze(0))
-            outputs = model.decoder(**encoder_outs, extra_returns=["stems"])
-            synth_stems = outputs["stems"][..., : audio.shape[-1]]
             train_classes = model.train_classes
+            encoder_outs = model.encoder(input_mix.unsqueeze(0))
+            if onsets is not None:
+                n_frames = encoder_outs["activations"]["velocity"].shape[-1]
+                override_onsets = convert_onset_dict_to_activations(
+                    onsets,
+                    n_frames,
+                    train_classes,
+                    batch_size=1,
+                    activation_rate=model.encoder.frame_rate,
+                ).to(input_mix.device)
+
+            outputs = model.decoder(
+                **encoder_outs, extra_returns=["stems"], override_onsets=override_onsets
+            )
+            synth_stems = outputs["stems"][..., : audio.shape[-1]]
 
     if masking:
         transform = STFT(
@@ -271,9 +293,12 @@ def separate(
     else:
         separated_stems = synth_stems
 
+    if not save_to_disk:
+        return separated_stems
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     for i, class_name in enumerate(train_classes):
         stem_audio = separated_stems[0, i].cpu().numpy()
         sf.write(output_path / f"{class_name}.wav", stem_audio.T, model_sr)
+    return separated_stems
 

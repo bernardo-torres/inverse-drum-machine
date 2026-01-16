@@ -104,7 +104,7 @@ class STFT(BaseTransform):
             "n_fft": n_fft,
             "hop_length": hop_length if hop_length is not None else n_fft // 4,
             "win_length": win_length if win_length is not None else n_fft,
-            "window": window,
+            "window": window if window is not None else torch.hann_window(n_fft),
             "center": center,
             "return_complex": True,
         }
@@ -123,6 +123,8 @@ class STFT(BaseTransform):
         x, x_shape = self._reshape_input(x)
         x = self._handle_padding(x, adjust_padding)
         # Compute STFT
+        if self.fft_kwargs["window"].device != x.device:
+            self.fft_kwargs["window"] = self.fft_kwargs["window"].to(x.device)
         stft = torch.stft(x, **self.fft_kwargs)
         # Post-process
         if self.magnitude:
@@ -149,6 +151,8 @@ class STFT(BaseTransform):
             # X = self._griffin_lim(X, n_iter)
             raise NotImplementedError("Griffin-Lim not implemented.")
 
+        if self.ifft_kwargs["window"].device != X.device:
+            self.ifft_kwargs["window"] = self.ifft_kwargs["window"].to(X.device)
         x = torch.istft(X, **self.ifft_kwargs, length=length)
 
         # Reshape if necessary

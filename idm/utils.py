@@ -1,6 +1,5 @@
 import functools
 import os
-from typing import Dict, List, Optional
 
 import numpy as np
 import soundfile as sf
@@ -17,13 +16,13 @@ log = RankedLogger(__name__, rank_zero_only=True)
 
 
 def convert_onset_dict_to_activations(
-    onsets_dict: Dict[str, List[torch.Tensor]],
+    onsets_dict: dict[str, list[torch.Tensor]],
     n_frames: int,
-    instrument_classes: List[str],
+    instrument_classes: list[str],
     batch_size: int = 1,
-    label_mapping: Optional[Dict[str, str]] = None,
+    label_mapping: dict[str, str] | None = None,
     activation_rate: float = None,
-    device: Optional[torch.device] = None,
+    device: torch.device | None = None,
 ) -> torch.Tensor:
     """Converts a dictionary of onset times into a multi-channel activation tensor.
 
@@ -52,10 +51,14 @@ def convert_onset_dict_to_activations(
         # onsets_per_batch is a list of tensors for the current instrument
         instrument_name = label_mapping.get(instrument_name, instrument_name)
         onsets_per_batch = onsets_dict.get(instrument_name, [])
-        if not isinstance(onsets_per_batch, list):
+        if len(onsets_per_batch) == 0:
+            continue
+        if not isinstance(onsets_per_batch[0], list):
             assert batch_size == 1, "Batch size must be 1 if onsets are not a list"
             onsets_per_batch = [onsets_per_batch]
         for batch_idx, onset_times in enumerate(onsets_per_batch):
+            if isinstance(onset_times, list):
+                onset_times = torch.tensor(onset_times, device=device)
             if onset_times.numel() == 0:
                 continue
             # Convert onset times (seconds) to frame indices
